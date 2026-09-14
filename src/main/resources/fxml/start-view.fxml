@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/25"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="ua.passporttrainer.controller.StartController"
+      alignment="CENTER"
+      spacing="18.0">
+    <children>
+        <Label fx:id="titleLabel" styleClass="title-label" text="%app.title" />
+        <Label fx:id="statusLabel" styleClass="status-label" text="%app.initializationMessage" />
+    </children>
+</VBox>

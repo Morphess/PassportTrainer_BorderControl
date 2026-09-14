@@ -1,0 +1,15 @@
+.root {
+    -fx-background-color: linear-gradient(to bottom right, #101827, #1d2a3d);
+    -fx-font-family: "System";
+}
+
+.title-label {
+    -fx-font-size: 34px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #f8fafc;
+}
+
+.status-label {
+    -fx-font-size: 16px;
+    -fx-text-fill: #a9b7ca;
+}
