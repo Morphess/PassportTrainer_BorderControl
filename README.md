@@ -6,37 +6,54 @@ Passport Trainer — локальний JavaFX-застосунок для ви�
 
 ## Вимоги
 
-- Java Development Kit 25;
-- Maven 3.9 або новіший;
+- Java Development Kit 25 або новіший;
 - Linux із графічним середовищем для локальної розробки;
 - цільова платформа майбутнього релізу — Windows 10/11 x86_64.
 
-Перевірка активного JDK:
+Глобальна інсталяція Maven не потрібна. Репозиторій містить Maven Wrapper,
+який під час першого запуску завантажує зафіксовану версію Maven 3.9.11.
+Для першого запуску потрібен доступ до Maven Central.
+
+Maven Wrapper використовує активний JDK. Налаштуйте JDK 25 один раз на рівні
+системи, IDE або постійної конфігурації shell; експортувати `JAVA_HOME` перед
+кожною командою не потрібно. Наприклад, у Fedora системний JDK можна вибрати:
+
+```bash
+sudo alternatives --config java
+sudo alternatives --config javac
+```
+
+Перевірка активного JDK і Maven:
 
 ```bash
 java --version
-mvn --version
+./mvnw --version
 ```
 
-У Fedora, якщо Java 25 встановлена в `/usr/lib/jvm/java-25-openjdk`, але не вибрана системно:
+Якщо Maven працює на Java нижче 25, build зупиниться на фазі `validate` з
+повідомленням про потрібну та фактичну версії Java.
+
+## Development запуск
+
+Єдина стандартна команда запуску JavaFX application:
 
 ```bash
-export JAVA_HOME=/usr/lib/jvm/java-25-openjdk
-export PATH="$JAVA_HOME/bin:$PATH"
+./mvnw compile exec:exec
 ```
 
-## Запуск
+## Tests
 
 ```bash
-mvn clean javafx:run
+./mvnw clean test
 ```
 
-## Перевірка
+## Build
 
 ```bash
-mvn clean test
-mvn clean package
+./mvnw package
 ```
+
+У Windows використовуйте відповідні команди через `mvnw.cmd`.
 
 ## Каталоги
 
