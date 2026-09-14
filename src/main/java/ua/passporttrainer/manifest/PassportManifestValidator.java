@@ -45,12 +45,21 @@ public final class PassportManifestValidator {
 
     public static void validate(Path sourceRoot, ManifestCatalogue catalogue) throws IOException {
         Objects.requireNonNull(sourceRoot, "sourceRoot");
-        Objects.requireNonNull(catalogue, "catalogue");
         Path source = sourceRoot.toAbsolutePath().normalize();
         if (!Files.isDirectory(source)) {
             throw new IllegalArgumentException("Source root is not a directory: " + sourceRoot);
         }
-        validateSummary(source, catalogue);
+        validate(catalogue);
+        if (!catalogue.summary().sourceRoot().equals(source.getFileName().toString())) {
+            throw new IllegalArgumentException("Manifest source root does not match the dataset directory");
+        }
+        validateImageSources(source, catalogue.images());
+        validateCompleteSourceCoverage(source, catalogue.images());
+    }
+
+    public static void validate(ManifestCatalogue catalogue) {
+        Objects.requireNonNull(catalogue, "catalogue");
+        validateSummary(catalogue);
 
         Map<String, ContinentEntry> continents = uniqueById(catalogue.continents(), ContinentEntry::id, "continent");
         Map<String, EntityEntry> entities = uniqueById(catalogue.entities(), EntityEntry::id, "entity");
@@ -74,18 +83,17 @@ public final class PassportManifestValidator {
         validateContinents(continents);
         validateEntities(entities, continents);
         validateDocuments(documents, entities);
-        Map<String, ImageEntry> imagesByDocument = validateImages(source, images, documents);
-        validateCompleteSourceCoverage(source, images.values());
+        Map<String, ImageEntry> imagesByDocument = validateImageRecords(images, documents);
         validateDuplicates(images.values(), imagesByDocument, documents);
         validateAliases(catalogue.aliases(), continents, entities);
     }
 
-    private static void validateSummary(Path sourceRoot, ManifestCatalogue catalogue) {
+    private static void validateSummary(ManifestCatalogue catalogue) {
         if (catalogue.summary().schemaVersion() != ManifestCatalogue.SCHEMA_VERSION) {
             throw new IllegalArgumentException("Unsupported manifest schema version");
         }
-        if (!catalogue.summary().sourceRoot().equals(sourceRoot.getFileName().toString())) {
-            throw new IllegalArgumentException("Manifest source root does not match the dataset directory");
+        if (catalogue.summary().sourceRoot().isBlank()) {
+            throw new IllegalArgumentException("Manifest source root is blank");
         }
         if (catalogue.summary().continentCount() != catalogue.continents().size()
                 || catalogue.summary().entityCount() != catalogue.entities().size()
@@ -158,11 +166,10 @@ public final class PassportManifestValidator {
         }
     }
 
-    private static Map<String, ImageEntry> validateImages(
-            Path sourceRoot,
+    private static Map<String, ImageEntry> validateImageRecords(
             Map<String, ImageEntry> images,
             Map<String, DocumentEntry> documents
-    ) throws IOException {
+    ) {
         Map<String, ImageEntry> byDocument = new HashMap<>();
         Set<String> sourcePaths = new HashSet<>();
         for (ImageEntry image : images.values()) {
@@ -173,6 +180,7 @@ public final class PassportManifestValidator {
             if (!sourcePaths.add(SourceNormalizer.normalizedSourcePath(image.sourcePath()))) {
                 throw new IllegalArgumentException("Duplicate normalized source path: " + image.sourcePath());
             }
+            resolveContained(Path.of("."), image.sourcePath());
             if (image.sourcePath().contains("\\")) {
                 throw new IllegalArgumentException("Source path must use POSIX separators: " + image.sourcePath());
             }
@@ -182,25 +190,20 @@ public final class PassportManifestValidator {
             if (!image.id().equals(expectedImageId) || !document.id().equals(expectedDocumentId)) {
                 throw new IllegalArgumentException("Source path does not map to deterministic IDs: " + image.sourcePath());
             }
-            Path sourcePath = resolveContained(sourceRoot, image.sourcePath());
-            if (!Files.isRegularFile(sourcePath)) {
-                throw new IllegalArgumentException("Manifest source path does not exist: " + image.sourcePath());
-            }
-            if (!sourcePath.getFileName().toString().equals(image.sourceFilename())) {
+            String sourceFilename = image.sourcePath().substring(image.sourcePath().lastIndexOf('/') + 1);
+            if (!sourceFilename.equals(image.sourceFilename())) {
                 throw new IllegalArgumentException("Source filename does not match path: " + image.sourcePath());
             }
-            if (Files.size(sourcePath) != image.fileSize()) {
-                throw new IllegalArgumentException("Source size changed: " + image.sourcePath());
+            if (image.width() <= 0 || image.height() <= 0 || image.fileSize() <= 0) {
+                throw new IllegalArgumentException("Invalid image dimensions or size: " + image.sourcePath());
             }
-            if (!sha256(sourcePath).equals(image.sha256())) {
-                throw new IllegalArgumentException("Source SHA-256 changed: " + image.sourcePath());
+            if (!image.sha256().matches("[0-9a-f]{64}")) {
+                throw new IllegalArgumentException("Invalid image SHA-256: " + image.sourcePath());
             }
-            if (image.width() <= 0 || image.height() <= 0) {
-                throw new IllegalArgumentException("Invalid image dimensions: " + image.sourcePath());
-            }
-            String extension = extension(sourcePath);
+            String extension = extension(image.sourceFilename());
             boolean expectedPng = extension.equals("png");
-            if ((expectedPng && (!image.format().equals("PNG") || !image.mimeType().equals("image/png")))
+            if ((!expectedPng && !IMAGE_EXTENSIONS.contains(extension))
+                    || (expectedPng && (!image.format().equals("PNG") || !image.mimeType().equals("image/png")))
                     || (!expectedPng && (!image.format().equals("JPEG") || !image.mimeType().equals("image/jpeg")))) {
                 throw new IllegalArgumentException("Image format metadata does not match source path: " + image.sourcePath());
             }
@@ -212,6 +215,21 @@ public final class PassportManifestValidator {
             throw new IllegalArgumentException("Every Stage 5 document must have exactly one source image");
         }
         return Map.copyOf(byDocument);
+    }
+
+    private static void validateImageSources(Path sourceRoot, Collection<ImageEntry> images) throws IOException {
+        for (ImageEntry image : images) {
+            Path sourcePath = resolveContained(sourceRoot, image.sourcePath());
+            if (!Files.isRegularFile(sourcePath)) {
+                throw new IllegalArgumentException("Manifest source path does not exist: " + image.sourcePath());
+            }
+            if (Files.size(sourcePath) != image.fileSize()) {
+                throw new IllegalArgumentException("Source size changed: " + image.sourcePath());
+            }
+            if (!sha256(sourcePath).equals(image.sha256())) {
+                throw new IllegalArgumentException("Source SHA-256 changed: " + image.sourcePath());
+            }
+        }
     }
 
     private static void validateCompleteSourceCoverage(Path sourceRoot, Collection<ImageEntry> images) throws IOException {
@@ -344,7 +362,10 @@ public final class PassportManifestValidator {
     }
 
     private static String extension(Path path) {
-        String name = path.getFileName().toString();
+        return extension(path.getFileName().toString());
+    }
+
+    private static String extension(String name) {
         int dot = name.lastIndexOf('.');
         return dot < 0 ? "" : name.substring(dot + 1).toLowerCase(java.util.Locale.ROOT);
     }
