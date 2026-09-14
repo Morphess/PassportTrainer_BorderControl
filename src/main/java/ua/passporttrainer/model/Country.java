@@ -9,6 +9,8 @@ public record Country(
         String isoAlpha2,
         String isoAlpha3,
         String displayName,
-        String sourceName
+        String sourceName,
+        EntityType entityType,
+        ReviewStatus reviewStatus
 ) {
 }

@@ -2,6 +2,8 @@ package ua.passporttrainer.repository.sqlite;
 
 import ua.passporttrainer.database.DatabaseConnectionProvider;
 import ua.passporttrainer.model.Country;
+import ua.passporttrainer.model.EntityType;
+import ua.passporttrainer.model.ReviewStatus;
 import ua.passporttrainer.repository.CountryRepository;
 import ua.passporttrainer.repository.RepositoryAccessException;
 
@@ -19,9 +21,10 @@ import java.util.Optional;
 /** Reads canonical issuing entities from the SQLite reference catalogue. */
 public final class SQLiteCountryRepository implements CountryRepository {
 
-    private static final String SELECT_COUNTRY = "SELECT e.id, ec.continent_id, e.iso_alpha2, e.iso_alpha3, "
-            + "e.display_name_uk, n.source_name FROM entities e "
-            + "JOIN entity_continents ec ON ec.entity_id = e.id AND ec.is_primary = 1 "
+    private static final String SELECT_COUNTRY = "SELECT e.id, primary_geography.continent_id, e.iso_alpha2, "
+            + "e.iso_alpha3, e.display_name_uk, e.entity_type, e.review_status, n.source_name FROM entities e "
+            + "JOIN entity_continents primary_geography "
+            + "ON primary_geography.entity_id = e.id AND primary_geography.is_primary = 1 "
             + "JOIN entity_source_names n ON n.entity_id = e.id AND n.sort_order = 0";
 
     private final DatabaseConnectionProvider connectionProvider;
@@ -43,6 +46,26 @@ public final class SQLiteCountryRepository implements CountryRepository {
             return List.copyOf(countries);
         } catch (SQLException exception) {
             throw new RepositoryAccessException("Cannot read catalogue entities", exception);
+        }
+    }
+
+    @Override
+    public List<Country> findByContinentId(String continentId) {
+        Objects.requireNonNull(continentId, "continentId");
+        String sql = SELECT_COUNTRY + " JOIN entity_continents membership ON membership.entity_id = e.id "
+                + "WHERE membership.continent_id = ? ORDER BY e.canonical_key, e.id";
+        try (Connection connection = connectionProvider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, continentId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                List<Country> countries = new ArrayList<>();
+                while (resultSet.next()) {
+                    countries.add(mapCountry(resultSet));
+                }
+                return List.copyOf(countries);
+            }
+        } catch (SQLException exception) {
+            throw new RepositoryAccessException("Cannot read catalogue entities by continent ID", exception);
         }
     }
 
@@ -88,7 +111,9 @@ public final class SQLiteCountryRepository implements CountryRepository {
                 resultSet.getString("iso_alpha2"),
                 resultSet.getString("iso_alpha3"),
                 resultSet.getString("display_name_uk"),
-                resultSet.getString("source_name")
+                resultSet.getString("source_name"),
+                EntityType.valueOf(resultSet.getString("entity_type")),
+                ReviewStatus.valueOf(resultSet.getString("review_status"))
         );
     }
 }

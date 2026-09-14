@@ -7,8 +7,11 @@ import ua.passporttrainer.CatalogueTestSupport;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
 import ua.passporttrainer.database.SQLiteConnectionProvider;
 import ua.passporttrainer.model.Country;
+import ua.passporttrainer.model.DocumentType;
+import ua.passporttrainer.model.EntityType;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
+import ua.passporttrainer.model.ReviewStatus;
 
 import java.nio.file.Path;
 import java.sql.Connection;
@@ -50,8 +53,22 @@ class SQLiteCatalogueRepositoryTest {
 
         assertTrue(ukraine.id().startsWith("entity:"));
         assertEquals("continent:europe", ukraine.continentId());
+        assertEquals(EntityType.COUNTRY, ukraine.entityType());
+        assertEquals(ReviewStatus.AUTO_CLASSIFIED, ukraine.reviewStatus());
         assertEquals(ukraine, countryRepository.findById(ukraine.id()).orElseThrow());
         assertTrue(countryRepository.findByIsoAlpha2("UA").isEmpty());
+    }
+
+    @Test
+    void continentAndCountryServicesIncludeAlternateGeography() throws Exception {
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(databasePath);
+        assertEquals(7, context.continentService().findAll().size());
+        assertEquals("continent:europe", context.continentService().findAll().getFirst().id());
+
+        List<Country> europe = context.countryService().findByContinentId("continent:europe");
+        List<Country> asia = context.countryService().findByContinentId("continent:asia");
+        assertTrue(europe.stream().anyMatch(country -> country.displayName().equals("Туреччина")));
+        assertTrue(asia.stream().anyMatch(country -> country.displayName().equals("Туреччина")));
     }
 
     @Test
@@ -66,12 +83,29 @@ class SQLiteCatalogueRepositoryTest {
         PassportDocument document = documents.getFirst();
         assertTrue(document.id().startsWith("document:"));
         assertEquals(ukraine.id(), document.countryId());
+        assertEquals(ReviewStatus.AUTO_CLASSIFIED, document.reviewStatus());
+        assertEquals(1, document.imageCount());
         assertEquals(document, passportRepository.findById(document.id()).orElseThrow());
 
         List<PassportImage> images = passportRepository.findImagesByDocumentId(document.id());
         assertEquals(1, images.size());
         assertEquals(document.id(), images.getFirst().passportDocumentId());
         assertEquals(document.sourceRelativePath(), images.getFirst().relativePath());
+    }
+
+    @Test
+    void passportRepositoryPreservesDistinctRecordsWithTheSamePresentationTitle() {
+        Country brunei = countryRepository.findAll().stream()
+                .filter(country -> country.displayName().equals("Бруней"))
+                .findFirst()
+                .orElseThrow();
+
+        long ordinaryPassports = passportRepository.findByCountryId(brunei.id()).stream()
+                .filter(document -> document.documentType() == DocumentType.ORDINARY_PASSPORT)
+                .filter(document -> document.title().equals("Звичайний паспорт"))
+                .count();
+
+        assertEquals(3, ordinaryPassports);
     }
 
     @Test
@@ -86,6 +120,7 @@ class SQLiteCatalogueRepositoryTest {
     @Test
     void compositionRootExposesServicesOverReadOnlyCatalogue() throws Exception {
         CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(databasePath);
+        assertEquals(7, context.continentService().findAll().size());
         assertEquals(139, context.countryService().findAll().size());
         Country first = context.countryService().findAll().getFirst();
         assertEquals(

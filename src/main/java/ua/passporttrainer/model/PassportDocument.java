@@ -9,6 +9,8 @@ public record PassportDocument(
         DocumentType documentType,
         String title,
         String variant,
-        String sourceRelativePath
+        String sourceRelativePath,
+        ReviewStatus reviewStatus,
+        int imageCount
 ) {
 }

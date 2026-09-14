@@ -7,6 +7,8 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import ua.passporttrainer.model.DocumentType;
+import ua.passporttrainer.model.EntityType;
+import ua.passporttrainer.model.ReviewStatus;
 import ua.passporttrainer.model.UserRole;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,6 +46,24 @@ class ArchitectureTest {
                         "UNKNOWN"
                 ),
                 List.of(DocumentType.values()).stream().map(Enum::name).toList()
+        );
+    }
+
+    @Test
+    void catalogueClassificationEnumsMatchThePersistedContract() {
+        assertEquals(
+                List.of(
+                        "COUNTRY",
+                        "TERRITORY",
+                        "ORGANIZATION",
+                        "DISPUTED_ENTITY",
+                        "AMBIGUOUS_ENTITY"
+                ),
+                List.of(EntityType.values()).stream().map(Enum::name).toList()
+        );
+        assertEquals(
+                List.of("VERIFIED", "AUTO_CLASSIFIED", "NEEDS_REVIEW", "EXCLUDED"),
+                List.of(ReviewStatus.values()).stream().map(Enum::name).toList()
         );
     }
 

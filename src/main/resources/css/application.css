@@ -13,3 +13,84 @@
     -fx-font-size: 16px;
     -fx-text-fill: #a9b7ca;
 }
+
+.screen-root {
+    -fx-background-color: linear-gradient(to bottom right, #101827, #1d2a3d);
+}
+
+.screen-title {
+    -fx-font-size: 28px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #f8fafc;
+}
+
+.section-title {
+    -fx-font-size: 17px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e2e8f0;
+}
+
+.support-label {
+    -fx-font-size: 14px;
+    -fx-text-fill: #a9b7ca;
+}
+
+.error-label {
+    -fx-text-fill: #fca5a5;
+}
+
+.content-panel,
+.image-panel {
+    -fx-background-color: rgba(15, 23, 42, 0.72);
+    -fx-background-radius: 10px;
+    -fx-border-color: #334155;
+    -fx-border-radius: 10px;
+    -fx-padding: 14px;
+}
+
+.image-panel {
+    -fx-padding: 20px;
+}
+
+.list-view,
+.text-field {
+    -fx-background-color: #f8fafc;
+    -fx-border-color: #64748b;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+    -fx-font-size: 14px;
+}
+
+.list-cell {
+    -fx-padding: 10px 12px;
+}
+
+.list-cell:filled:selected {
+    -fx-background-color: #2563eb;
+    -fx-text-fill: white;
+}
+
+.button {
+    -fx-background-color: #334155;
+    -fx-background-radius: 6px;
+    -fx-text-fill: #f8fafc;
+    -fx-padding: 9px 16px;
+    -fx-font-size: 14px;
+}
+
+.button:hover {
+    -fx-background-color: #475569;
+}
+
+.primary-button {
+    -fx-background-color: #2563eb;
+    -fx-font-weight: bold;
+}
+
+.primary-button:hover {
+    -fx-background-color: #1d4ed8;
+}
+
+.button:disabled {
+    -fx-opacity: 0.48;
+}

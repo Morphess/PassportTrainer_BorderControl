@@ -19,6 +19,10 @@ public final class CountryService {
         return List.copyOf(countryRepository.findAll());
     }
 
+    public List<Country> findByContinentId(String continentId) {
+        return List.copyOf(countryRepository.findByContinentId(continentId));
+    }
+
     public Optional<Country> findById(String id) {
         return countryRepository.findById(id);
     }

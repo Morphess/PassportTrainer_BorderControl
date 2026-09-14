@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Цей документ фіксує межі компонентів; Stage 5 реалізував read-only manifest pipeline, а Stage 6 — окремий versioned SQLite catalogue pipeline та repository implementations. Повна бізнес-логіка й catalogue UI належать наступним етапам.
+Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Stage 5 реалізував read-only manifest pipeline, Stage 6 — versioned SQLite catalogue pipeline та repository implementations, а Stage 7 — browse-only catalogue UI поверх цих меж. Інтерактивна карта, quiz generation, режими гри та writable persistence належать наступним етапам.
 
 ## Шари та дозволені залежності
 
@@ -47,26 +47,33 @@ Model ──► only Java/JDK types (never JavaFX)
 
 ### `PassportTrainerApplication`
 
-JavaFX composition root на поточному етапі. Він створює `NavigationService`, задає параметри головного `Stage` і відкриває перший екран. У міру появи реалізацій repository тут або в окремому малому `ApplicationContext` будуть зв'язуватися залежності. Composition root не повинен перетворюватися на сервіс або містити бізнес-правила.
+JavaFX composition root. Він визначає runtime locations, відкриває й перевіряє read-only `CatalogueApplicationContext`, створює `PassportImageLocator`, explicit controller factory та `NavigationService`, задає параметри головного `Stage` і відкриває START. Якщо catalogue не відкривається або не проходить integrity validation, START залишається працездатним і показує локалізовану помилку. Composition root не містить бізнес-правил.
 
 ### `NavigationService`
 
-Єдина точка завантаження FXML:
+Єдина точка завантаження FXML і зміни екранів:
 
 - приймає логічний екран із реєстру `View`;
-- знаходить FXML у classpath;
+- знаходить FXML та shared CSS у classpath;
 - створює `FXMLLoader` із ресурсами локалізації;
-- встановлює кореневий вузол сцени;
-- один раз підключає CSS;
-- перетворює помилки завантаження на `NavigationException` із контекстом.
+- делегує створення controller до `NavigationControllerFactory`;
+- дозволяє typed one-shot initialization controller після FXML injection і до показу root;
+- встановлює кореневий вузол однієї сцени;
+- веде instance-local back stack із попередніх roots;
+- перетворює відсутні ресурси й помилки FXML на `NavigationException` із контекстом.
 
-Контролери не повинні створювати `FXMLLoader`. Для переходу вони отримуватимуть `NavigationService` як залежність. Коли контролерам знадобиться constructor injection, фабрика контролерів буде налаштована централізовано всередині навігаційної інфраструктури/composition root.
+Контролери не створюють `FXMLLoader`, `Scene` або `Stage`. Усі переходи й повернення виконуються через injected `NavigationService`; глобального navigation state немає.
 
 ### Контролери
 
-Кожен FXML-екран має власний вузький контролер: наприклад, `StartController`, у майбутньому `LoginController`, `CountryListController`, `PassportDetailsController`, `QuizController`. Загальний `MainController`, який керує всією програмою, не використовується.
+Кожен FXML-екран має власний вузький controller:
 
-Поточний `StartController` відповідає лише за стартовий екран і перевіряє коректність FXML-injection.
+- `StartController` показує availability catalogue і відкриває catalogue flow;
+- `CatalogueController` відображає canonical continents/entities, membership counts, review/type labels і Unicode-normalized search;
+- `PassportListController` відображає всі документи одного entity;
+- `PassportDetailsController` показує metadata, image loading/error state та керування послідовністю зображень.
+
+`CatalogueControllerFactory` явно створює лише підтримувані controller types і передає `NavigationService`, сервіси, image locator та `ResourceBundle` через constructors. DI framework, service locator, controller SQL/TSV/filesystem scanning і загальний `MainController` не використовуються.
 
 ## Domain model
 
@@ -74,11 +81,13 @@ JavaFX composition root на поточному етапі. Він створю�
 
 | Модель | Призначення |
 |---|---|
-| `Continent` | Континент у каталозі та його джерельна назва. |
-| `Country` | Країна або інша сутність-емітент із посиланням на континент. |
-| `PassportDocument` | Логічний документ або окремий його варіант. |
+| `Continent` | Канонічний континент, його source name і порядок відображення. |
+| `Country` | Країна або інша сутність-емітент із primary continent, `EntityType` і `ReviewStatus`. |
+| `PassportDocument` | Логічний документ або окремий його варіант із `DocumentType`, `ReviewStatus` та image count. |
 | `PassportImage` | Шлях, формат, розмір і SHA-256 конкретного зображення. |
 | `DocumentType` | Канонічний тип документа. |
+| `EntityType` | `COUNTRY`, `TERRITORY`, `ORGANIZATION`, `DISPUTED_ENTITY` або `AMBIGUOUS_ENTITY`. |
+| `ReviewStatus` | `VERIFIED`, `AUTO_CLASSIFIED`, `NEEDS_REVIEW` або `EXCLUDED`. |
 | `User` | Локальний користувач; містить тільки password hash, не відкритий пароль. |
 | `UserRole` | Роль `USER` або `ADMIN`. |
 | `QuizQuestion` | Запитання, варіанти й правильна відповідь. |
@@ -108,21 +117,22 @@ Catalogue records використовують stable Stage 5 `String` IDs end-t
 
 Generated catalogue нормалізовано за рівнями continent, entity, document та image. Exact duplicate files залишаються окремими records і посилаються на deterministic representative. `VERIFIED`, `AUTO_CLASSIFIED`, `NEEDS_REVIEW`, `EXCLUDED` є повним review-status contract; `quizEligible=true` дозволено лише для `VERIFIED` document/entity з відомим `DocumentType`.
 
-Manifest і SQLite schema зберігають primary та alternate continent IDs через `entity_continents`. `Country` повертає primary `continentId` для поточного application API; many-to-many geography не дублюється в domain record лише заради storage schema.
+Manifest і SQLite schema зберігають primary та alternate continent IDs через `entity_continents`. `Country` повертає primary `continentId`, а `CountryRepository.findByContinentId` шукає через усі membership rows, тому transcontinental entities з'являються в кожному відповідному canonical continent без дублювання domain identity.
 
 ## Repository contracts
 
 | Repository | Відповідальність |
 |---|---|
-| `CountryRepository` | Читання країн і пошук за ID/ISO-кодом. |
-| `PassportRepository` | Читання документів країни та пов'язаних зображень. |
+| `ContinentRepository` | Упорядковане читання canonical continents. |
+| `CountryRepository` | Читання entities, continent memberships і пошук за ID/ISO-кодом. |
+| `PassportRepository` | Читання всіх документів entity та пов'язаних зображень. |
 | `UserRepository` | Пошук і збереження локальних користувачів. |
 | `ResultRepository` | Збереження та читання екзаменаційних результатів. |
 | `SettingsRepository` | Читання й збереження локальних налаштувань. |
 
-Контракти повертають domain-моделі. SQL, назви таблиць, `ResultSet` і JDBC-винятки не повинні просочуватися в контролери.
+Контракти повертають domain-моделі. SQL, назви таблиць, `ResultSet` і JDBC-винятки не просочуються в controllers.
 
-`SQLiteCountryRepository` і `SQLitePassportRepository` розташовані в `repository.sqlite`, залежать від `DatabaseConnectionProvider`, використовують prepared statements і перетворюють `SQLException` на `RepositoryAccessException`. Вони не знають про TSV, source filesystem або JavaFX.
+`SQLiteContinentRepository`, `SQLiteCountryRepository` і `SQLitePassportRepository` розташовані в `repository.sqlite`, залежать від `DatabaseConnectionProvider`, використовують prepared statements для параметризованих lookup і перетворюють `SQLException` на `RepositoryAccessException`. Вони не знають про TSV, source filesystem або JavaFX.
 
 ## Database layer
 
@@ -132,7 +142,7 @@ Manifest і SQLite schema зберігають primary та alternate continent 
 
 `PassportCatalogueImporter` читає тільки `ManifestCatalogue`, виконує source-independent Stage 5 contract validation, застосовує migration, перебудовує canonical rows у transaction і запускає `PassportCatalogueValidator` до commit. Importer не сканує passport assets, не класифікує filenames і не змінює manifest. `PassportCatalogueFingerprint` обчислює SHA-256 ordered logical rows, тому determinism не залежить від SQLite page layout.
 
-Reference catalogue генерується під час build/release та встановлюється як read-only application data. Майбутня writable DB для users, settings, results і statistics є окремим persistence concern: `%LOCALAPPDATA%\\PassportTrainer` на Windows і XDG user-data location на Linux. Writable state не розміщується в installation directory.
+Reference catalogue генерується під час build/release та встановлюється як read-only application data. Stage 7 versioned development artifact знаходиться в `data/passport-catalogue/passport-catalogue.sqlite`; його можна перевизначити через `passporttrainer.catalogue.path`. Майбутня writable DB для users, settings, results і statistics є окремим persistence concern: `%LOCALAPPDATA%\\PassportTrainer` на Windows і XDG user-data location на Linux. Writable state не розміщується в installation directory.
 
 CLI після compilation:
 
@@ -143,12 +153,24 @@ java -cp <runtime-classpath> ua.passporttrainer.catalogue.PassportCatalogueTool 
   validate <output>/passport-catalogue.sqlite
 ```
 
+## Passport image location
+
+SQLite зберігає тільки canonical POSIX-style `source_relative_path`. `PassportImageLocator` є межею між presentation і deployment layout; `FileSystemPassportImageLocator`:
+
+- отримує один configured read-only root (`passporttrainer.assets.root`; development default — `Зразки паспортних документів`);
+- відхиляє absolute, Windows-drive, backslash, empty-component і traversal paths;
+- resolve-ить real paths і забороняє symlink escape за межі root;
+- перевіряє regular/readable file та повертає `URI`.
+
+Controller не будує filesystem paths і не сканує source collection. Stage 7 не копіює та не змінює passport assets. Майбутній Windows package мусить розмістити read-only catalogue й image tree зі збереженою relative-path structure та передати їх locations через deployment configuration; конкретний installer layout у Stage 7 не визначений.
+
 ## Services
 
 | Сервіс | Залежності | Межа відповідальності |
 |---|---|---|
-| `CountryService` | `CountryRepository` | Каталог і пошук країн. |
-| `PassportService` | `PassportRepository` | Документи країни та їх зображення. |
+| `ContinentService` | `ContinentRepository` | Канонічний список континентів. |
+| `CountryService` | `CountryRepository` | Каталог entities, continent membership і lookup. |
+| `PassportService` | `PassportRepository` | Усі документи entity та їх зображення. |
 | `QuizService` | `ResultRepository`, `Clock` | Життєвий цикл валідної сесії, одноразове приймання відповіді, одноразове завершення та збереження результату лише для завершеного `EXAMINATION`. Генерація запитань ще не реалізована. |
 | `AuthenticationService` | `UserRepository`, `PasswordHasher` | Пошук активного користувача й делегування безпечної перевірки пароля. |
 | `StatisticsService` | `ResultRepository` | Читання результатів і базове агрегування балів. |
@@ -160,55 +182,63 @@ java -cp <runtime-classpath> ua.passporttrainer.catalogue.PassportCatalogueTool 
 
 ## Типовий потік виклику
 
-Приклад відкриття паспортів країни:
+Приклад відкриття паспортів entity:
 
 ```text
-Country screen
-    │ UI event
+Catalogue View
+    │ selected continentId / entityId
     ▼
-CountryController
-    │ countryId
+CatalogueController
+    │
+    ├──► ContinentService ──► ContinentRepository
+    └──► CountryService   ──► CountryRepository
+                                  │
+                                  ▼
+                             SQLite catalogue
+
+Passport List View
+    │ selected documentId
     ▼
-PassportService
-    │ findByCountryId(countryId)
-    ▼
-PassportRepository
-    │ prepared SQL
-    ▼
-DatabaseConnectionProvider → SQLite JDBC
+PassportListController ──► PassportService ──► PassportRepository
+    │
+    └──► NavigationService ──► PassportDetailsController
+                                      │
+                                      ├──► PassportService
+                                      └──► PassportImageLocator ──► read-only image URI
 ```
 
-Після отримання даних контролер лише перетворює результат на стан свого view. Він не кешує глобальний стан програми й не бере на себе відповідальність інших екранів.
+Після отримання даних controllers лише перетворюють результат на view state. Вони не кешують глобальний стан програми, не застосовують quiz eligibility і не беруть на себе відповідальність інших screens.
 
 ## Створення залежностей
 
-Catalogue dependencies already compose outside JavaFX through `CatalogueApplicationContext`:
+Runtime composition:
 
-1. отримати path до packaged read-only SQLite catalogue;
-2. створити read-only `SQLiteConnectionProvider`;
-3. перевірити migration version та catalogue integrity;
-4. створити `SQLiteCountryRepository` і `SQLitePassportRepository`;
-5. передати repositories у `CountryService` і `PassportService`.
+1. `ApplicationLocations` нормалізує configured catalogue/image locations;
+2. `CatalogueApplicationContext.openReadOnly` створює read-only `SQLiteConnectionProvider` і перевіряє migration version та catalogue integrity;
+3. context створює три SQLite repositories та відповідні services;
+4. `PassportTrainerApplication` створює `PassportImageLocator` і `CatalogueControllerFactory`;
+5. `NavigationService` передає factory кожному `FXMLLoader`;
+6. factory constructor-injects лише залежності конкретного controller.
 
-Наступний UI stage передасть потрібні сервіси й `NavigationService` конкретним controllers через централізовану controller factory. `PassportTrainerApplication` на Stage 6 навмисно не відкриває нових screens.
-
-Service locator і глобальні mutable singleton-об'єкти не плануються. Один компонент може бути singleton за життєвим циклом, але його залежності мають залишатися явними.
+Failure to open or validate catalogue creates an unavailable factory: START remains loadable, показує одну локалізовану помилку й disables catalogue action. Service locator і global mutable singleton-об'єкти відсутні.
 
 ## Тестові межі
 
-- model і service тести не запускають JavaFX toolkit;
-- repository integration-тести використовують лише тимчасові SQLite DB;
-- controller тести підмінятимуть сервіси;
-- navigation smoke-тест перевіряє наявність FXML, а повний UI-запуск перевіряється окремо;
-- `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model.
+- model, service і pure presentation тести не запускають JavaFX toolkit;
+- repository integration-тести використовують лише temporary SQLite DB;
+- catalogue UI smoke-тести завантажують real FXML через production navigation/controller factory, перевіряють user-observable state, real image decode, multi-image controls і back navigation на graphical JavaFX toolkit;
+- UI тести не порівнюють pixel-perfect screenshots;
+- `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model;
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
-- SQLite integration tests перевіряють migration, foreign keys, full import, rollback, canonical counts/content, repositories, read-only composition та logical determinism;
+- SQLite integration tests перевіряють migration, foreign keys, full import, rollback, canonical counts/content, repositories, read-only composition та logical determinism.
 
 ## Що навмисно не реалізовано
 
+- інтерактивна карта;
 - генератори навчальних та екзаменаційних запитань;
 - конкретний password hashing algorithm;
-- повні екрани й переходи між ними;
+- learning, training та examination screens;
+- review editor;
 - збереження активної quiz-сесії.
 
 Ці компоненти додаються окремими етапами без порушення зафіксованого напрямку залежностей.

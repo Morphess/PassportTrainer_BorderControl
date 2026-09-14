@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ListView?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/25"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="ua.passporttrainer.controller.CatalogueController"
+            styleClass="screen-root">
+    <padding>
+        <Insets top="24.0" right="24.0" bottom="24.0" left="24.0" />
+    </padding>
+    <top>
+        <VBox spacing="8.0">
+            <Label styleClass="screen-title" text="%catalogue.title" />
+            <Label fx:id="messageLabel" styleClass="support-label" text="%catalogue.provisionalNotice" wrapText="true" />
+        </VBox>
+    </top>
+    <left>
+        <VBox prefWidth="280.0" spacing="10.0" styleClass="content-panel">
+            <BorderPane.margin>
+                <Insets top="20.0" />
+            </BorderPane.margin>
+            <Label styleClass="section-title" text="%catalogue.continents" />
+            <ListView fx:id="continentList" VBox.vgrow="ALWAYS" />
+        </VBox>
+    </left>
+    <center>
+        <VBox spacing="10.0" styleClass="content-panel">
+            <BorderPane.margin>
+                <Insets top="20.0" left="18.0" />
+            </BorderPane.margin>
+            <Label styleClass="section-title" text="%catalogue.entities" />
+            <TextField fx:id="searchField" promptText="%catalogue.searchPrompt" />
+            <ListView fx:id="entityList" VBox.vgrow="ALWAYS" />
+        </VBox>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER_RIGHT" spacing="10.0">
+            <BorderPane.margin>
+                <Insets top="18.0" />
+            </BorderPane.margin>
+            <Button onAction="#goBack" text="%common.back" />
+            <Button fx:id="openButton" defaultButton="true" onAction="#openSelectedEntity"
+                    styleClass="primary-button" text="%catalogue.openEntity" />
+        </HBox>
+    </bottom>
+</BorderPane>

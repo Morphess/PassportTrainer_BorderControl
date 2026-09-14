@@ -4,6 +4,7 @@ import ua.passporttrainer.database.DatabaseConnectionProvider;
 import ua.passporttrainer.model.DocumentType;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
+import ua.passporttrainer.model.ReviewStatus;
 import ua.passporttrainer.repository.PassportRepository;
 import ua.passporttrainer.repository.RepositoryAccessException;
 
@@ -20,8 +21,10 @@ import java.util.Optional;
 public final class SQLitePassportRepository implements PassportRepository {
 
     private static final String SELECT_DOCUMENT = "SELECT d.id, d.entity_id, d.document_type, d.title_uk, "
-            + "d.variant, (SELECT i.source_relative_path FROM passport_images i "
-            + "WHERE i.document_id = d.id ORDER BY i.source_relative_path LIMIT 1) AS source_relative_path "
+            + "d.variant, d.review_status, "
+            + "(SELECT i.source_relative_path FROM passport_images i "
+            + "WHERE i.document_id = d.id ORDER BY i.source_relative_path LIMIT 1) AS source_relative_path, "
+            + "(SELECT COUNT(*) FROM passport_images i WHERE i.document_id = d.id) AS image_count "
             + "FROM documents d";
 
     private final DatabaseConnectionProvider connectionProvider;
@@ -90,7 +93,9 @@ public final class SQLitePassportRepository implements PassportRepository {
                 DocumentType.valueOf(resultSet.getString("document_type")),
                 resultSet.getString("title_uk"),
                 resultSet.getString("variant"),
-                resultSet.getString("source_relative_path")
+                resultSet.getString("source_relative_path"),
+                ReviewStatus.valueOf(resultSet.getString("review_status")),
+                resultSet.getInt("image_count")
         );
     }
 

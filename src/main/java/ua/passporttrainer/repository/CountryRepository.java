@@ -9,6 +9,8 @@ public interface CountryRepository {
 
     List<Country> findAll();
 
+    List<Country> findByContinentId(String continentId);
+
     Optional<Country> findById(String id);
 
     Optional<Country> findByIsoAlpha2(String isoAlpha2);

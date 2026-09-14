@@ -35,25 +35,28 @@ The roadmap preserves the established architecture and product scope. Details re
 - **Dependencies:** completed Stage 5 manifest and a separate accepted database-design decision.
 - **Delivered:** stable Stage 5 text identities, normalized schema version 1, checksummed migration runner, transactional manifest-only importer, database integrity validation, read-only catalogue composition, and working `CountryRepository`/`PassportRepository` SQLite implementations.
 
-## 5. Country/passport catalogue UI
+## 5. Country/passport catalogue UI — Stage 7
 
-- **Status:** Next.
+- **Status:** Completed in Stage 7.
 
 - **Goal:** let users browse canonical countries and passport documents through the existing JavaFX architecture.
-- **Primary result:** navigable country and passport catalogue screens backed by services and repositories.
-- **Dependencies:** Stage 4 catalogue access and established navigation conventions.
+- **Primary result:** START → continent/entity catalogue → document list → image details, backed by read-only services/repositories with localized status and error presentation.
+- **Delivered:** explicit constructor-injected controller creation, instance-local back navigation, seven canonical continents with membership counts, Unicode search, entity/review classification, complete document listings, real image loading with portable path containment, loading/error states, and multi-image controls.
+- **Dependencies:** completed Stage 6 catalogue access and established navigation conventions.
 
 ## 6. Interactive world map
 
+- **Status:** Next.
+
 - **Goal:** support continent and country selection through an interactive map without replacing catalogue navigation.
-- **Primary result:** a clickable world-map flow connected to canonical country data and passport catalogue screens.
-- **Dependencies:** Stage 5 navigation flow plus an approved map asset and interaction design.
+- **Primary result:** a clickable world-map flow connected to canonical country data and the implemented passport catalogue screens.
+- **Dependencies:** Stage 7 catalogue navigation plus an approved map asset and interaction design.
 
 ## 7. Quiz generation engine
 
 - **Goal:** generate valid country-identification and document-type questions with multiple answer options and controlled randomization.
 - **Primary result:** a domain-level question generator operating only on eligible canonical passport records.
-- **Dependencies:** Stage 2 invariants, Stage 3 eligibility data, and Stage 4 catalogue access.
+- **Dependencies:** Stage 4C invariants, Stage 5 eligibility data, and Stage 6 catalogue access.
 
 ## 8. Learning and training modes
 
