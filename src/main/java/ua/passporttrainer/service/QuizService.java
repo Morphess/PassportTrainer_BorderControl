@@ -48,6 +48,12 @@ public final class QuizService {
     public QuizSession submitAnswer(QuizSession session, long questionId, String selectedAnswer) {
         Objects.requireNonNull(session, "session");
         Objects.requireNonNull(selectedAnswer, "selectedAnswer");
+        if (session.completed()) {
+            throw new IllegalStateException("Quiz session is already completed");
+        }
+        if (session.answers().stream().anyMatch(answer -> answer.questionId() == questionId)) {
+            throw new IllegalStateException("Question already answered: " + questionId);
+        }
 
         QuizQuestion question = session.questions().stream()
                 .filter(candidate -> candidate.id() == questionId)
@@ -76,6 +82,9 @@ public final class QuizService {
 
     public QuizSession completeSession(QuizSession session) {
         Objects.requireNonNull(session, "session");
+        if (session.completed()) {
+            throw new IllegalStateException("Quiz session is already completed");
+        }
 
         return new QuizSession(
                 session.id(),
@@ -90,8 +99,11 @@ public final class QuizService {
 
     public ExamResult saveExamResult(long resultId, QuizSession completedSession) {
         Objects.requireNonNull(completedSession, "completedSession");
+        if (completedSession.mode() != QuizMode.EXAMINATION) {
+            throw new IllegalArgumentException("Quiz session is not an examination");
+        }
         if (!completedSession.completed()) {
-            throw new IllegalArgumentException("Quiz session is not completed");
+            throw new IllegalStateException("Quiz session is not completed");
         }
 
         int correctAnswers = (int) completedSession.answers().stream()

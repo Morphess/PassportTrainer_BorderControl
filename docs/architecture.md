@@ -88,17 +88,17 @@ JavaFX composition root на поточному етапі. Він створю�
 
 Допоміжний `QuizMode` відображає три режими: `LEARNING`, `TRAINING`, `EXAMINATION`.
 
-`DocumentType` має рівно такі значення:
+`DocumentType` має один authoritative contract із рівно такими значеннями:
 
 ```text
-INTERNATIONAL
-INTERNAL
-DIPLOMATIC
-SERVICE
-TEMPORARY
-OTHER
+ORDINARY_PASSPORT
+DIPLOMATIC_PASSPORT
+SERVICE_PASSPORT
+NATIONAL_ID
 UNKNOWN
 ```
+
+Ці значення описують чотири підтверджені dataset-класи та невизначений тип. Початкові назви й псевдоніми на кшталт `ззп`, `ДП`, `СП`, `id` не є enum-значеннями. Окремі `TEMPORARY` або `OTHER` не вводяться без підтверджених продуктових чи dataset-вимог; неоднозначний запис залишається `UNKNOWN` до ручної перевірки.
 
 ## Repository contracts
 
@@ -126,12 +126,14 @@ Database layer не знає про екрани, контролери або п
 |---|---|---|
 | `CountryService` | `CountryRepository` | Каталог і пошук країн. |
 | `PassportService` | `PassportRepository` | Документи країни та їх зображення. |
-| `QuizService` | `ResultRepository`, `Clock` | Життєвий цикл сесії, приймання відповіді й формування базового результату. Генерація запитань ще не реалізована. |
+| `QuizService` | `ResultRepository`, `Clock` | Життєвий цикл валідної сесії, одноразове приймання відповіді, одноразове завершення та збереження результату лише для завершеного `EXAMINATION`. Генерація запитань ще не реалізована. |
 | `AuthenticationService` | `UserRepository`, `PasswordHasher` | Пошук активного користувача й делегування безпечної перевірки пароля. |
 | `StatisticsService` | `ResultRepository` | Читання результатів і базове агрегування балів. |
 | `SettingsService` | `SettingsRepository` | Читання/збереження параметрів без знання способу зберігання. |
 
 `Clock` передається в `QuizService`, щоб час можна було детерміновано контролювати в тестах. Конкретний алгоритм хешування паролів навмисно не закодований в `AuthenticationService`: він буде окремою реалізацією `PasswordHasher`.
+
+`QuizQuestion` вимагає непорожній prompt, щонайменше два унікальні options і належність correct answer до options. `QuizSession` вимагає непорожній набір запитань з унікальними ID, не більше однієї узгодженої відповіді на запитання та відсутність відповідей на сторонні запитання. `ExamResult` гарантує `0 <= correctAnswers <= totalQuestions`, додатну кількість запитань і невід'ємну тривалість.
 
 ## Типовий потік виклику
 

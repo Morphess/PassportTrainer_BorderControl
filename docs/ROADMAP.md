@@ -4,17 +4,23 @@ The roadmap preserves the established architecture and product scope. Details re
 
 ## 1. Project context and agent rules — Stage 4B
 
+- **Status:** Completed in Stage 4B.
+
 - **Goal:** establish persistent technical context, hard project rules, current-state documentation, and a shared delivery sequence.
 - **Primary result:** `.omp/AGENTS.md`, `.omp/RULES.md`, `docs/PROJECT_STATE.md`, and this roadmap are present and mutually consistent.
 - **Dependencies:** completed repository audit and Stage 4A build/runtime stabilization.
 
-## 2. Domain contracts and QuizService invariants
+## 2. Domain contracts and QuizService invariants — Stage 4C
+
+- **Status:** Completed in Stage 4C.
 
 - **Goal:** make existing domain and quiz lifecycle contracts internally consistent before data and UI layers depend on them.
 - **Primary result:** explicitly decided domain contracts and enforced quiz-session invariants with focused behavioral verification.
 - **Dependencies:** Stage 4B rules and the current architecture baseline.
 
 ## 3. Canonical passport manifest
+
+- **Status:** Next.
 
 - **Goal:** create a reviewed, machine-readable mapping from immutable source paths to canonical countries/entities and document types.
 - **Primary result:** a versioned manifest that preserves source traceability and separates accepted records from ambiguous data.

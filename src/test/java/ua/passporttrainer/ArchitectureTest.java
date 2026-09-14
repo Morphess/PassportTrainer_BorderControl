@@ -37,12 +37,10 @@ class ArchitectureTest {
     void documentTypesMatchTheArchitectureContract() {
         assertEquals(
                 List.of(
-                        "INTERNATIONAL",
-                        "INTERNAL",
-                        "DIPLOMATIC",
-                        "SERVICE",
-                        "TEMPORARY",
-                        "OTHER",
+                        "ORDINARY_PASSPORT",
+                        "DIPLOMATIC_PASSPORT",
+                        "SERVICE_PASSPORT",
+                        "NATIONAL_ID",
                         "UNKNOWN"
                 ),
                 List.of(DocumentType.values()).stream().map(Enum::name).toList()

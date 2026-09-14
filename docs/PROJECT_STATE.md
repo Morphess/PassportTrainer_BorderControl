@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after Stage 4A. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after Stage 4C. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -23,11 +23,12 @@ This document records the repository state after Stage 4A. It distinguishes impl
 - One minimal JavaFX start screen loaded from FXML with CSS and a resource bundle.
 - Central FXML loading and scene-root replacement through `NavigationService`.
 - JDK-only domain records and enums for countries, passports, users, quiz sessions, answers, and results.
+- The authoritative `DocumentType` contract is `ORDINARY_PASSPORT`, `DIPLOMATIC_PASSPORT`, `SERVICE_PASSPORT`, `NATIONAL_ID`, and `UNKNOWN`.
 - Repository interfaces for countries, passports, users, results, and settings.
 - Service-layer classes using constructor injection.
 - `DatabaseConnectionProvider` and a basic `SQLiteConnectionProvider`.
-- Basic in-memory quiz-session lifecycle when a prepared question list is supplied by a caller.
-- Six JUnit tests: three architecture tests and three application/resource smoke tests.
+- In-memory quiz-session lifecycle with validated questions, unique question IDs and answer options, one answer per question, immutable completion, bounded scores, and examination-only result-save delegation.
+- Twenty-four JUnit tests: the original six architecture/application tests and eighteen quiz behavioral tests.
 - Source passport dataset audit in `docs/database-analysis.md`.
 
 ### Partially implemented
@@ -35,7 +36,7 @@ This document records the repository state after Stage 4A. It distinguishes impl
 - Navigation infrastructure exists, but the only registered screen is the start view.
 - Passport models, repository contract, and service exist, but no repository implementation or application integration loads passport records.
 - SQLite connection creation exists, but schema, migrations, and SQLite repository implementations do not.
-- Quiz session creation, answer submission, completion, and result construction exist, but question generation and mode-specific rules do not.
+- Quiz session creation, answer submission, completion, and result construction enforce domain invariants, but question generation and mode-specific rules do not exist.
 - Learning, training, and examination are represented by `QuizMode`, but their behavior is not differentiated.
 - Authentication, settings, and statistics have service and repository boundaries but no persistence implementations or UI flows.
 - Localization infrastructure exists as one default resource bundle with minimal text.
@@ -104,13 +105,19 @@ Stage 4A verification established that:
 - the documented development command starts the JavaFX process;
 - application code and passport assets were not changed during Stage 4A.
 
+Stage 4C verification established that:
+
+- the code and relevant documentation use one canonical `DocumentType` contract;
+- quiz questions, sessions, answers, and examination results enforce the documented invariants;
+- duplicate answers and operations after completion are rejected;
+- all original tests and eighteen new behavioral tests pass;
+- no persistence, importer, UI, map, or passport-asset functionality was added.
+
 ### Known technical debt
 
-- `QuizService` does not yet enforce one answer per question, immutable completion, examination-only result persistence, or score bounds under duplicate answers.
-- Domain records provide limited validation of identifiers, nullability, and value ranges.
-- The canonical `DocumentType` vocabulary must be reconciled with the terminology proposed by the dataset audit before persistence schema work.
+- Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
 - Missing resources can escape `NavigationService` as null-related failures rather than a uniform navigation error.
-- Existing tests cover architecture and startup resources but not service behavior or persistence integration.
+- Tests now cover quiz lifecycle and validation behavior, but persistence integration and full JavaFX behavior remain untested.
 - The produced JAR is not a complete Windows distribution; native packaging remains absent.
 - Maven 3.9.11 emits a non-fatal Guice `sun.misc.Unsafe` deprecation warning on Java 25.
 
@@ -136,8 +143,8 @@ Source files must remain unchanged. Future normalization belongs in a separate c
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stage 4A changed build/runtime infrastructure only; it did not change application behavior.
+- Stage 4A changed build/runtime infrastructure only; Stage 4C changes domain contracts, quiz invariants, behavioral tests, and factual documentation only.
 
 ### Immediate next step
 
-Stage 4B establishes persistent agent context and project rules. The next implementation stage is to review domain contracts and correct `QuizService` invariants before canonical manifest and persistence work. Scope and contract changes must be justified before implementation.
+Stage 4C completed the domain-contract and quiz-invariant work. The immediate next stage is the canonical passport manifest. SQLite schema, importer implementation, and later UI work remain separate future stages.
