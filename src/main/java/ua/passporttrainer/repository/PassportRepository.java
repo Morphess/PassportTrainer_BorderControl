@@ -8,9 +8,9 @@ import ua.passporttrainer.model.PassportImage;
 
 public interface PassportRepository {
 
-    Optional<PassportDocument> findById(long id);
+    Optional<PassportDocument> findById(String id);
 
-    List<PassportDocument> findByCountryId(long countryId);
+    List<PassportDocument> findByCountryId(String countryId);
 
-    List<PassportImage> findImagesByDocumentId(long passportDocumentId);
+    List<PassportImage> findImagesByDocumentId(String passportDocumentId);
 }

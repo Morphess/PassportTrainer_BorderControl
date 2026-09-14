@@ -421,3 +421,15 @@ Stable text IDs використовують full SHA-256: entity ID поход�
 Validator перевіряє unique IDs, complete source-image coverage, існування/size/SHA-256 source files, canonical enum/status values, continent/entity/document/image references, deterministic IDs and ordering, duplicate representatives, summary counts, aliases та quiz eligibility. `UNKNOWN`, unresolved entity/type/geography conflicts і conflicting duplicate groups не можуть потрапити до quiz pool.
 
 Manifest підтримує primary і alternate continent IDs, але наявний `Country` domain record має лише один `continentId`. До SQLite integration потрібне окреме рішення: зберегти primary continent для основного маршруту та додати many-to-many relation для Cyprus, Turkey, Timor-Leste і майбутніх transcontinental cases. Stage 5 не змінює `Country`, не створює SQLite schema і не інтегрує catalogue в application UI.
+
+## 11. Stage 6 SQLite catalogue
+
+Stage 6 не повторює filesystem audit. `PassportCatalogueImporter` читає лише canonical Stage 5 manifest після source-independent contract validation. Metadata corrections уже materialized у manifest; importer не має filename/directory classification logic і не змінює ні source assets, ні TSV.
+
+Schema version 1 зберігає stable manifest IDs як `TEXT PRIMARY KEY`. Primary та alternate geography нормалізовано в `entity_continents`; original entity names — в `entity_source_names`; exact source-relative POSIX paths — у `passport_images`. `documents` і `passport_images` зберігають review status та self-referencing duplicate links, а `documents` окремо зберігає `quiz_eligible`.
+
+Full import дає 7 `continents`, 139 `entities`, 521 `documents`, 521 `passport_images`, 166 `aliases` і 142 `entity_continents` rows: 139 primary та 3 alternate. DocumentType counts залишаються 133/162/79/146/1; review state — 462 `AUTO_CLASSIFIED` і 59 `NEEDS_REVIEW`; quiz-eligible rows — 0; duplicate document/image references — по 90.
+
+Schema відтворюється plain SQL migration `V001__create_catalogue.sql`; lightweight runner зберігає SHA-256 migration checksum. Import виконується transactionally із foreign keys enabled, post-import integrity validation та rollback on failure. Repeatability порівнюється SHA-256 ordered logical rows, а не raw SQLite bytes, бо page layout не є catalogue contract.
+
+Packaged reference catalogue має відкриватися read-only. Future writable users/settings/results/statistics database залишається окремою та повинна бути розміщена в `%LOCALAPPDATA%\\PassportTrainer` на Windows, а не в application installation directory.

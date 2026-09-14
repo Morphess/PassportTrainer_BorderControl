@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Цей документ фіксує межі компонентів; Stage 5 реалізував окремий read-only manifest pipeline, тоді як повна бізнес-логіка, SQL-схема та імпорт manifest у SQLite належать наступним етапам.
+Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Цей документ фіксує межі компонентів; Stage 5 реалізував read-only manifest pipeline, а Stage 6 — окремий versioned SQLite catalogue pipeline та repository implementations. Повна бізнес-логіка й catalogue UI належать наступним етапам.
 
 ## Шари та дозволені залежності
 
@@ -33,7 +33,7 @@ Model ──► only Java/JDK types (never JavaFX)
 1. Контролер обробляє UI-події, викликає сервіси та просить `NavigationService` змінити екран. Він не виконує SQL і не завантажує FXML самостійно.
 2. Сервіс координує сценарій використання та залежить від repository-контрактів через constructor injection.
 3. Repository приховує спосіб зберігання. Інтерфейси не знають про JavaFX або конкретний SQLite JDBC URL.
-4. Майбутні SQLite-реалізації repository використовуватимуть тільки `DatabaseConnectionProvider` із шару `database`.
+4. SQLite-реалізації repository використовують тільки `DatabaseConnectionProvider` із шару `database`.
 5. Модель не залежить від JavaFX, FXML, JDBC або конкретної БД.
 6. Верхній шар може залежати від нижнього, але нижній не залежить від верхнього.
 
@@ -100,13 +100,15 @@ UNKNOWN
 
 Ці значення описують чотири підтверджені dataset-класи та невизначений тип. Початкові назви й псевдоніми на кшталт `ззп`, `ДП`, `СП`, `id` не є enum-значеннями. Окремі `TEMPORARY` або `OTHER` не вводяться без підтверджених продуктових чи dataset-вимог; неоднозначний запис залишається `UNKNOWN` до ручної перевірки.
 
+Catalogue records використовують stable Stage 5 `String` IDs end-to-end. Це усуває окремий synthetic numeric identity space; `Continent`, `Country`, `PassportDocument`, `PassportImage` та catalogue repository/service lookup methods узгоджені з SQLite `TEXT` keys.
+
 ## Canonical manifest tooling
 
 `ua.passporttrainer.manifest` є JDK-only tooling boundary між immutable source assets і майбутнім SQLite catalogue. `PassportManifestGenerator` читає source collection та versioned TSV corrections, створює deterministic normalized TSV catalogue і не записує нічого в source directory. `PassportManifestValidator` перевіряє stable IDs, source paths, enum/status contracts, references, duplicate relationships, ordering та quiz eligibility.
 
 Generated catalogue нормалізовано за рівнями continent, entity, document та image. Exact duplicate files залишаються окремими records і посилаються на deterministic representative. `VERIFIED`, `AUTO_CLASSIFIED`, `NEEDS_REVIEW`, `EXCLUDED` є повним review-status contract; `quizEligible=true` дозволено лише для `VERIFIED` document/entity з відомим `DocumentType`.
 
-Manifest зберігає primary та alternate continent IDs. Поточний `Country` record залишається без змін; перед SQLite integration потрібне окреме рішення щодо many-to-many geographic relation для transcontinental entities.
+Manifest і SQLite schema зберігають primary та alternate continent IDs через `entity_continents`. `Country` повертає primary `continentId` для поточного application API; many-to-many geography не дублюється в domain record лише заради storage schema.
 
 ## Repository contracts
 
@@ -120,13 +122,26 @@ Manifest зберігає primary та alternate continent IDs. Поточний
 
 Контракти повертають domain-моделі. SQL, назви таблиць, `ResultSet` і JDBC-винятки не повинні просочуватися в контролери.
 
-Реалізації на кшталт `SQLiteCountryRepository` будуть створені після затвердження схеми БД. Вони належатимуть підпакету `repository.sqlite` і залежатимуть від `DatabaseConnectionProvider`.
+`SQLiteCountryRepository` і `SQLitePassportRepository` розташовані в `repository.sqlite`, залежать від `DatabaseConnectionProvider`, використовують prepared statements і перетворюють `SQLException` на `RepositoryAccessException`. Вони не знають про TSV, source filesystem або JavaFX.
 
 ## Database layer
 
-`DatabaseConnectionProvider` є мінімальною межею отримання JDBC-з'єднання. `SQLiteConnectionProvider` формує `jdbc:sqlite:` URL із нормалізованого абсолютного `Path` і повертає нове з'єднання; закривати його зобов'язаний repository через try-with-resources.
+`DatabaseConnectionProvider` є мінімальною межею отримання JDBC-з'єднання. `SQLiteConnectionProvider` формує `jdbc:sqlite:` URL із нормалізованого абсолютного `Path`, вмикає foreign keys для кожного connection і підтримує explicit read-only mode для runtime catalogue. Закривати connection зобов'язаний caller через try-with-resources.
 
-Database layer не знає про екрани, контролери або правила тестів. Міграції, транзакційна політика та створення схеми ще не реалізовані.
+`SQLiteMigrationRunner` застосовує ordered SQL resources, перевіряє name і SHA-256 уже застосованої migration та відмовляється від unknown/newer schema. Version 1 містить `schema_migrations`, `catalogue_metadata`, `continents`, `entities`, `entity_source_names`, `entity_continents`, `documents`, `passport_images` і `aliases`. Stable manifest IDs є `TEXT PRIMARY KEY`; duplicate references — self foreign keys; exact source path — portable POSIX relative text.
+
+`PassportCatalogueImporter` читає тільки `ManifestCatalogue`, виконує source-independent Stage 5 contract validation, застосовує migration, перебудовує canonical rows у transaction і запускає `PassportCatalogueValidator` до commit. Importer не сканує passport assets, не класифікує filenames і не змінює manifest. `PassportCatalogueFingerprint` обчислює SHA-256 ordered logical rows, тому determinism не залежить від SQLite page layout.
+
+Reference catalogue генерується під час build/release та встановлюється як read-only application data. Майбутня writable DB для users, settings, results і statistics є окремим persistence concern: `%LOCALAPPDATA%\\PassportTrainer` на Windows і XDG user-data location на Linux. Writable state не розміщується в installation directory.
+
+CLI після compilation:
+
+```bash
+java -cp <runtime-classpath> ua.passporttrainer.catalogue.PassportCatalogueTool \
+  rebuild data/passport-manifest <output>/passport-catalogue.sqlite
+java -cp <runtime-classpath> ua.passporttrainer.catalogue.PassportCatalogueTool \
+  validate <output>/passport-catalogue.sqlite
+```
 
 ## Services
 
@@ -167,29 +182,30 @@ DatabaseConnectionProvider → SQLite JDBC
 
 ## Створення залежностей
 
-На наступних етапах залежності мають складатися в одному composition root:
+Catalogue dependencies already compose outside JavaFX through `CatalogueApplicationContext`:
 
-1. визначити шлях до локальної SQLite БД;
-2. створити `SQLiteConnectionProvider`;
-3. створити SQLite repository-реалізації;
-4. передати repository в сервіси;
-5. передати потрібні сервіси й `NavigationService` конкретним контролерам через централізовану controller factory.
+1. отримати path до packaged read-only SQLite catalogue;
+2. створити read-only `SQLiteConnectionProvider`;
+3. перевірити migration version та catalogue integrity;
+4. створити `SQLiteCountryRepository` і `SQLitePassportRepository`;
+5. передати repositories у `CountryService` і `PassportService`.
+
+Наступний UI stage передасть потрібні сервіси й `NavigationService` конкретним controllers через централізовану controller factory. `PassportTrainerApplication` на Stage 6 навмисно не відкриває нових screens.
 
 Service locator і глобальні mutable singleton-об'єкти не плануються. Один компонент може бути singleton за життєвим циклом, але його залежності мають залишатися явними.
 
 ## Тестові межі
 
 - model і service тести не запускають JavaFX toolkit;
-- repository integration-тести використовуватимуть тимчасову SQLite БД;
+- repository integration-тести використовують лише тимчасові SQLite DB;
 - controller тести підмінятимуть сервіси;
 - navigation smoke-тест перевіряє наявність FXML, а повний UI-запуск перевіряється окремо;
 - `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model.
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
+- SQLite integration tests перевіряють migration, foreign keys, full import, rollback, canonical counts/content, repositories, read-only composition та logical determinism;
 
 ## Що навмисно не реалізовано
 
-- SQLite schema and migrations;
-- SQLite repository implementations and ingestion of the canonical manifest;
 - генератори навчальних та екзаменаційних запитань;
 - конкретний password hashing algorithm;
 - повні екрани й переходи між ними;

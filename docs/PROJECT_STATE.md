@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after Stage 5. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after Stage 6. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -22,23 +22,27 @@ This document records the repository state after Stage 5. It distinguishes imple
 - JavaFX development launch through `exec-maven-plugin` and the existing `Launcher`.
 - One minimal JavaFX start screen loaded from FXML with CSS and a resource bundle.
 - Central FXML loading and scene-root replacement through `NavigationService`.
-- JDK-only domain records and enums for countries, passports, users, quiz sessions, answers, and results.
+- JDK-only domain records and enums for countries, passports, users, quiz sessions, answers, and results; catalogue identities use the stable Stage 5 text IDs.
 - The authoritative `DocumentType` contract is `ORDINARY_PASSPORT`, `DIPLOMATIC_PASSPORT`, `SERVICE_PASSPORT`, `NATIONAL_ID`, and `UNKNOWN`.
 - Repository interfaces for countries, passports, users, results, and settings.
 - Service-layer classes using constructor injection.
-- `DatabaseConnectionProvider` and a basic `SQLiteConnectionProvider`.
+- `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
 - In-memory quiz-session lifecycle with validated questions, unique question IDs and answer options, one answer per question, immutable completion, bounded scores, and examination-only result-save delegation.
-- Thirty-nine JUnit tests: the original twenty-four tests and fifteen manifest normalization, generation, validation, and source-traceability tests.
+- Fifty-six JUnit tests: the original thirty-nine tests and seventeen isolated SQLite migration, import, integrity, repository, and composition tests.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
 - The verified source passport dataset audit and Stage 5 manifest decisions in `docs/database-analysis.md`.
+- A checksummed version-1 SQLite migration for normalized catalogue metadata, continents, entities, geography, documents, images, aliases, review state, eligibility, and duplicate relationships.
+- A deterministic transactional importer that consumes only the validated Stage 5 manifest, plus post-import database validation and an ordered logical catalogue fingerprint.
+- Working `SQLiteCountryRepository` and `SQLitePassportRepository` implementations behind the existing repository boundaries, with canonical `String` IDs.
+- A minimal non-JavaFX `CatalogueApplicationContext` that validates a read-only catalogue and wires both SQLite repositories into `CountryService` and `PassportService`.
 
 ### Partially implemented
 
 - Navigation infrastructure exists, but the only registered screen is the start view.
-- Passport models, repository contract, and service exist, and the canonical manifest is generated, but no repository implementation or application integration loads those records.
-- SQLite connection creation exists, but schema, migrations, and SQLite repository implementations do not.
+- Passport domain models, repository contracts, services, SQLite implementations, and non-UI composition are present; no JavaFX catalogue screen consumes the services yet.
+- Versioned SQLite schema creation and deterministic manifest ingestion are implemented; release packaging of a prebuilt read-only catalogue remains a later Windows-release concern.
 - Quiz session creation, answer submission, completion, and result construction enforce domain invariants, but question generation and mode-specific rules do not exist.
 - Learning, training, and examination are represented by `QuizMode`, but their behavior is not differentiated.
 - Authentication, settings, and statistics have service and repository boundaries but no persistence implementations or UI flows.
@@ -46,8 +50,6 @@ This document records the repository state after Stage 5. It distinguishes imple
 
 ### Not implemented
 
-- SQLite catalogue ingestion from the canonical manifest.
-- SQLite catalogue schema, migrations, and repository implementations.
 - Country and passport catalogue screens.
 - Interactive world map and country selection.
 - Passport image loading in the application UI.
@@ -73,9 +75,10 @@ JavaFX View (FXML/CSS)
 - Controllers are scoped to individual FXML views.
 - Services coordinate use cases and receive dependencies through constructors.
 - Repository interfaces isolate services from persistence technology.
-- `database` contains JDBC connection infrastructure.
+- `database` contains JDBC connection infrastructure and the lightweight migration runner.
+- `catalogue` contains canonical import, validation, logical fingerprinting, CLI tooling, and the non-UI catalogue composition root.
 - `navigation` is UI infrastructure; `NavigationService` is the centralized FXML loader.
-- The current composition root wires only startup navigation. Persistence and application services are not yet connected to controllers.
+- The JavaFX composition root still wires only startup navigation; `CatalogueApplicationContext` separately proves real service access without adding screens.
 
 ### Build and runtime
 
@@ -124,17 +127,26 @@ Stage 5 verification established that:
 - 59 unresolved documents are marked `NEEDS_REVIEW`, and all 521 documents remain quiz-ineligible until explicit verification;
 - fifteen new manifest tests cover normalization, aliases, stable IDs, duplicate handling, validation, eligibility, source traceability, and deterministic output.
 
+Stage 6 verification established that:
+
+- schema version 1 is reproducible from a checksummed plain SQL migration;
+- every provided SQLite connection enables foreign keys, and runtime catalogue composition uses read-only mode;
+- the canonical manifest imports as 7 continents, 139 entities, 521 documents, 521 images, and 166 aliases;
+- primary and alternate continent relations, review status, zero quiz-eligible documents, exact source-relative paths, and 90 duplicate relationships survive import;
+- invalid manifests fail before mutation, transactional failures roll back, and independent rebuilds produce the same ordered logical SHA-256 fingerprint;
+- SQLite repositories and both application services read the real imported catalogue from isolated temporary databases.
+
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
 - Missing resources can escape `NavigationService` as null-related failures rather than a uniform navigation error.
-- Tests cover quiz lifecycle and the manifest pipeline, but SQLite integration and full JavaFX behavior remain untested.
+- Tests cover quiz lifecycle, the manifest pipeline, SQLite migrations/import/integrity, repository mappings, and non-UI catalogue composition, but full JavaFX behavior remains untested.
 - The produced JAR is not a complete Windows distribution; native packaging remains absent.
 - Maven 3.9.11 emits a non-fatal Guice `sun.misc.Unsafe` deprecation warning on Java 25.
 
 ### Passport dataset state
 
-`Зразки паспортних документів/` remains the unchanged source dataset. The Stage 5 tool scans it read-only; the application does not load it or the generated manifest yet.
+`Зразки паспортних документів/` remains the unchanged source dataset. Stage 5 tooling alone scans it; Stage 6 imports the canonical manifest without reading or classifying source assets, and repositories read only SQLite.
 
 The repeated audit and generated manifest record:
 
@@ -146,7 +158,7 @@ The repeated audit and generated manifest record:
 - 133 ordinary, 162 diplomatic, 79 service, 146 national-ID, and 1 `UNKNOWN` document-type classifications;
 - inconsistent geography, naming, case, and Unicode retained as source traceability plus versioned correction metadata.
 
-Source files must remain unchanged. Future SQLite catalogue ingestion must consume the canonical manifest rather than infer records directly from directory and filename conventions.
+Source files must remain unchanged. SQLite catalogue ingestion consumes the canonical manifest and never infers records from directory or filename conventions.
 
 ### Current Git/development workflow
 
@@ -155,8 +167,8 @@ Source files must remain unchanged. Future SQLite catalogue ingestion must consu
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stages 4A and 4C established build and domain behavior; Stage 5 adds only the read-only manifest tool, metadata, generated catalogue, tests, and factual documentation.
+- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 adds only catalogue persistence, repositories, non-UI composition, tests, and factual documentation.
 
 ### Immediate next step
 
-Stage 5 completed the canonical passport manifest. The immediate next stage is a separately approved SQLite catalogue schema and repository implementation that imports the manifest. UI, map, quiz generation, authentication, statistics, and Windows packaging remain later stages.
+Stage 6 completed SQLite catalogue ingestion and country/passport repository access. The immediate next stage is Country and Passport Catalogue UI. Map interaction, quiz generation, authentication, statistics, mutable user persistence, and Windows packaging remain later stages.

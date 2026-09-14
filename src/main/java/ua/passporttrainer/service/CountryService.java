@@ -19,7 +19,7 @@ public final class CountryService {
         return List.copyOf(countryRepository.findAll());
     }
 
-    public Optional<Country> findById(long id) {
+    public Optional<Country> findById(String id) {
         return countryRepository.findById(id);
     }
 

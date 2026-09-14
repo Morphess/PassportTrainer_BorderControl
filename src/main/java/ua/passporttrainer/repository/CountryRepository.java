@@ -9,7 +9,7 @@ public interface CountryRepository {
 
     List<Country> findAll();
 
-    Optional<Country> findById(long id);
+    Optional<Country> findById(String id);
 
     Optional<Country> findByIsoAlpha2(String isoAlpha2);
 }

@@ -28,13 +28,16 @@ The roadmap preserves the established architecture and product scope. Details re
 
 ## 4. SQLite catalogue and repository implementations
 
-- **Status:** Next.
+- **Status:** Completed in Stage 6.
 
 - **Goal:** provide persistent catalogue access behind existing repository boundaries.
 - **Primary result:** an approved SQLite catalogue, migrations, and working country/passport repository implementations populated from the canonical manifest.
 - **Dependencies:** completed Stage 5 manifest and a separate accepted database-design decision.
+- **Delivered:** stable Stage 5 text identities, normalized schema version 1, checksummed migration runner, transactional manifest-only importer, database integrity validation, read-only catalogue composition, and working `CountryRepository`/`PassportRepository` SQLite implementations.
 
 ## 5. Country/passport catalogue UI
+
+- **Status:** Next.
 
 - **Goal:** let users browse canonical countries and passport documents through the existing JavaFX architecture.
 - **Primary result:** navigable country and passport catalogue screens backed by services and repositories.

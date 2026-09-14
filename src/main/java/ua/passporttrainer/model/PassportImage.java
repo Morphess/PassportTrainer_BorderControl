@@ -4,8 +4,8 @@ package ua.passporttrainer.model;
  * Metadata of an image belonging to a passport document.
  */
 public record PassportImage(
-        long id,
-        long passportDocumentId,
+        String id,
+        String passportDocumentId,
         String relativePath,
         String originalFileName,
         String mimeType,

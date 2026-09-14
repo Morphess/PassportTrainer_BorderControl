@@ -16,15 +16,15 @@ public final class PassportService {
         this.passportRepository = Objects.requireNonNull(passportRepository, "passportRepository");
     }
 
-    public Optional<PassportDocument> findById(long id) {
+    public Optional<PassportDocument> findById(String id) {
         return passportRepository.findById(id);
     }
 
-    public List<PassportDocument> findByCountryId(long countryId) {
+    public List<PassportDocument> findByCountryId(String countryId) {
         return List.copyOf(passportRepository.findByCountryId(countryId));
     }
 
-    public List<PassportImage> findImages(long passportDocumentId) {
+    public List<PassportImage> findImages(String passportDocumentId) {
         return List.copyOf(passportRepository.findImagesByDocumentId(passportDocumentId));
     }
 }

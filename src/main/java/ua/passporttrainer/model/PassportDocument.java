@@ -4,8 +4,8 @@ package ua.passporttrainer.model;
  * A logical passport document or document variant.
  */
 public record PassportDocument(
-        long id,
-        long countryId,
+        String id,
+        String countryId,
         DocumentType documentType,
         String title,
         String variant,

@@ -4,8 +4,8 @@ package ua.passporttrainer.model;
  * A country or other passport-issuing entity.
  */
 public record Country(
-        long id,
-        long continentId,
+        String id,
+        String continentId,
         String isoAlpha2,
         String isoAlpha3,
         String displayName,
