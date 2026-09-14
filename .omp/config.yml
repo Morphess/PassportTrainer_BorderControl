@@ -1,0 +1,10 @@
+modelRoles:
+  default: openai-codex/gpt-5.6-sol:high
+  slow: openai-codex/gpt-5.6-sol:xhigh
+  plan: openai-codex/gpt-5.6-sol:xhigh
+  task: github-copilot/claude-sonnet-5:high
+  advisor: github-copilot/claude-opus-5:high
+  smol: google-antigravity/gemini-3.8-flash:medium
+  tiny: google-antigravity/gemini-3.8-flash:low
+  vision: google-antigravity/gemini-3.8-flash:high
+  commit: openai-codex/gpt-5.6-luna:low
