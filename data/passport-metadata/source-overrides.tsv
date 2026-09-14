@@ -1,0 +1,4 @@
+sourcePath	canonicalEntityKey	documentType	reviewStatus	quizEligible	notes
+Африка/бенін/бруней/дипломатичний.png	бруней	DIPLOMATIC_PASSPORT	AUTO_CLASSIFIED	false	Nested Brunei directory inside Benin; exact duplicate confirms Brunei mapping.
+Африка/бенін/бруней/ззп.png	бруней	ORDINARY_PASSPORT	AUTO_CLASSIFIED	false	Nested Brunei directory inside Benin; exact duplicate confirms Brunei mapping.
+Європа/данія/внутрішній id.jpg	австрія	NATIONAL_ID	NEEDS_REVIEW	false	Exact duplicate of the Austrian ID image; previous audit identified Austria on the image.

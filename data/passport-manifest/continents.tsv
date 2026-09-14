@@ -1,0 +1,8 @@
+id	code	displayNameUk	sourceName	sortOrder
+continent:europe	EUROPE	Європа	Європа	1
+continent:asia	ASIA	Азія	Азія	2
+continent:africa	AFRICA	Африка	Африка	3
+continent:north-america	NORTH_AMERICA	Північна Америка	Північна Амерка	4
+continent:south-america	SOUTH_AMERICA	Південна Америка	Південна Америка	5
+continent:australia	AUSTRALIA	Австралія	Австралія континент	6
+continent:oceania	OCEANIA	Океанія	Океанія	7

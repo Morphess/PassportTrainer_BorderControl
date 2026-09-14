@@ -1,0 +1,8 @@
+sourceKey	id	code	displayNameUk	sourceName	sortOrder
+європа	continent:europe	EUROPE	Європа	Європа	1
+азія	continent:asia	ASIA	Азія	Азія	2
+африка	continent:africa	AFRICA	Африка	Африка	3
+північна амерка	continent:north-america	NORTH_AMERICA	Північна Америка	Північна Амерка	4
+південна америка	continent:south-america	SOUTH_AMERICA	Південна Америка	Південна Америка	5
+австралія континент	continent:australia	AUSTRALIA	Австралія	Австралія континент	6
+океанія	continent:oceania	OCEANIA	Океанія	Океанія	7

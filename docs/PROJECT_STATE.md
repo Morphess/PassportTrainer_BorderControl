@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after Stage 4C. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after Stage 5. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -28,13 +28,16 @@ This document records the repository state after Stage 4C. It distinguishes impl
 - Service-layer classes using constructor injection.
 - `DatabaseConnectionProvider` and a basic `SQLiteConnectionProvider`.
 - In-memory quiz-session lifecycle with validated questions, unique question IDs and answer options, one answer per question, immutable completion, bounded scores, and examination-only result-save delegation.
-- Twenty-four JUnit tests: the original six architecture/application tests and eighteen quiz behavioral tests.
-- Source passport dataset audit in `docs/database-analysis.md`.
+- Thirty-nine JUnit tests: the original twenty-four tests and fifteen manifest normalization, generation, validation, and source-traceability tests.
+- A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
+- A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
+- A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
+- The verified source passport dataset audit and Stage 5 manifest decisions in `docs/database-analysis.md`.
 
 ### Partially implemented
 
 - Navigation infrastructure exists, but the only registered screen is the start view.
-- Passport models, repository contract, and service exist, but no repository implementation or application integration loads passport records.
+- Passport models, repository contract, and service exist, and the canonical manifest is generated, but no repository implementation or application integration loads those records.
 - SQLite connection creation exists, but schema, migrations, and SQLite repository implementations do not.
 - Quiz session creation, answer submission, completion, and result construction enforce domain invariants, but question generation and mode-specific rules do not exist.
 - Learning, training, and examination are represented by `QuizMode`, but their behavior is not differentiated.
@@ -43,7 +46,7 @@ This document records the repository state after Stage 4C. It distinguishes impl
 
 ### Not implemented
 
-- Canonical passport manifest and importer.
+- SQLite catalogue ingestion from the canonical manifest.
 - SQLite catalogue schema, migrations, and repository implementations.
 - Country and passport catalogue screens.
 - Interactive world map and country selection.
@@ -113,28 +116,37 @@ Stage 4C verification established that:
 - all original tests and eighteen new behavioral tests pass;
 - no persistence, importer, UI, map, or passport-asset functionality was added.
 
+Stage 5 verification established that:
+
+- the read-only scanner reproduces the verified 521-image dataset audit without changing source assets;
+- metadata plus source assets generate a validated, deterministically ordered TSV catalogue;
+- 90 additional exact-copy records reference deterministic representatives instead of being removed;
+- 59 unresolved documents are marked `NEEDS_REVIEW`, and all 521 documents remain quiz-ineligible until explicit verification;
+- fifteen new manifest tests cover normalization, aliases, stable IDs, duplicate handling, validation, eligibility, source traceability, and deterministic output.
+
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
 - Missing resources can escape `NavigationService` as null-related failures rather than a uniform navigation error.
-- Tests now cover quiz lifecycle and validation behavior, but persistence integration and full JavaFX behavior remain untested.
+- Tests cover quiz lifecycle and the manifest pipeline, but SQLite integration and full JavaFX behavior remain untested.
 - The produced JAR is not a complete Windows distribution; native packaging remains absent.
 - Maven 3.9.11 emits a non-fatal Guice `sun.misc.Unsafe` deprecation warning on Java 25.
 
 ### Passport dataset state
 
-`Зразки паспортних документів/` is the unchanged source dataset and is not imported by the application.
+`Зразки паспортних документів/` remains the unchanged source dataset. The Stage 5 tool scans it read-only; the application does not load it or the generated manifest yet.
 
-The completed audit records:
+The repeated audit and generated manifest record:
 
-- 521 readable passport-document images;
-- 173 physical second-level country/entity directories;
-- 141 normalized unique names, not all of which represent sovereign states;
-- 431 unique binary images and 87 exact-duplicate groups;
-- inconsistent geography, naming, document types, case, and Unicode normalization;
-- ambiguous records that require manual canonical decisions.
+- 521 readable passport-document images and 4 excluded `.DS_Store` service files;
+- 173 physical second-level country/entity directories and 141 normalized source entity names;
+- 139 canonical entity records after explicit alias mergers;
+- 431 unique binary images and 87 exact-duplicate groups, represented by 90 duplicate relationships;
+- 462 `AUTO_CLASSIFIED` and 59 `NEEDS_REVIEW` document records;
+- 133 ordinary, 162 diplomatic, 79 service, 146 national-ID, and 1 `UNKNOWN` document-type classifications;
+- inconsistent geography, naming, case, and Unicode retained as source traceability plus versioned correction metadata.
 
-Source files must remain unchanged. Future normalization belongs in a separate canonical manifest and SQLite catalogue while retaining original relative paths.
+Source files must remain unchanged. Future SQLite catalogue ingestion must consume the canonical manifest rather than infer records directly from directory and filename conventions.
 
 ### Current Git/development workflow
 
@@ -143,8 +155,8 @@ Source files must remain unchanged. Future normalization belongs in a separate c
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stage 4A changed build/runtime infrastructure only; Stage 4C changes domain contracts, quiz invariants, behavioral tests, and factual documentation only.
+- Stages 4A and 4C established build and domain behavior; Stage 5 adds only the read-only manifest tool, metadata, generated catalogue, tests, and factual documentation.
 
 ### Immediate next step
 
-Stage 4C completed the domain-contract and quiz-invariant work. The immediate next stage is the canonical passport manifest. SQLite schema, importer implementation, and later UI work remain separate future stages.
+Stage 5 completed the canonical passport manifest. The immediate next stage is a separately approved SQLite catalogue schema and repository implementation that imports the manifest. UI, map, quiz generation, authentication, statistics, and Windows packaging remain later stages.

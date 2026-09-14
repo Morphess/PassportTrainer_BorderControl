@@ -389,3 +389,35 @@ PassportDocument 1 ── N PassportImage
 - Unicode-перевірка виконана з NFC-нормалізацією.
 - Семантично конфліктні зображення переглянуто вибірково.
 - Повна експертна перевірка справжності, країни, покоління та актуальності кожного документа не виконувалась; для цього потрібен окремий ручний етап.
+
+## 10. Stage 5 canonical manifest
+
+Stage 5 повторив аудит напряму з filesystem і підтвердив основні кількісні висновки: 7 continent directories, 173 second-level entity directories, 521 readable images, 4 service files, 431 SHA-256 groups, 87 exact-duplicate groups і 90 додаткових copies. Уточнення: 22 second-level entity directories не NFC, а recursive count дорівнює 23 через додатковий nested directory `Африка/бенін/бруней`.
+
+Versioned hand-maintained inputs розташовані в `data/passport-metadata/`:
+
+- `continents.tsv` — physical-to-canonical continent mapping;
+- `entity-corrections.tsv` — aliases, canonical names, entity types, geography, review decisions and notes;
+- `document-type-aliases.tsv` — filename/directory tokens mapped only to the Stage 4C `DocumentType` contract;
+- `source-overrides.tsv` — exact-path corrections without source mutation;
+- `source-exclusions.tsv` — explicit non-image exclusions.
+
+`PassportManifestGenerator` читає ці inputs разом з immutable source collection і відтворює `data/passport-manifest/`. Catalogue складається з `manifest.tsv`, `continents.tsv`, `entities.tsv`, `documents.tsv`, `images.tsv` та `aliases.tsv`. TSV обрано замість JSON/YAML, CSV і generated Java: normalized relational tables не потребують runtime parser dependency, дають стабільні Unicode Git diffs і прямо відповідають майбутнім SQLite tables.
+
+Generation and standalone validation commands після compilation:
+
+```bash
+./mvnw -q -DskipTests compile
+$JAVA_HOME/bin/java -cp target/classes ua.passporttrainer.manifest.PassportManifestTool generate \
+  'Зразки паспортних документів' data/passport-metadata data/passport-manifest
+$JAVA_HOME/bin/java -cp target/classes ua.passporttrainer.manifest.PassportManifestTool validate \
+  'Зразки паспортних документів' data/passport-manifest
+```
+
+Generated manifest містить 7 continents, 139 canonical entities, 521 provisional documents, 521 source images and 166 aliases. Document types: 133 `ORDINARY_PASSPORT`, 162 `DIPLOMATIC_PASSPORT`, 79 `SERVICE_PASSPORT`, 146 `NATIONAL_ID`, 1 `UNKNOWN`. Review state: 462 documents `AUTO_CLASSIFIED`, 59 `NEEDS_REVIEW`; verified documents наразі відсутні, тому всі 521 records мають `quizEligible=false`.
+
+Stable text IDs використовують full SHA-256: entity ID походить від versioned canonical normalized key, document/image IDs — від NFC-normalized POSIX source-relative path. Absolute installation path, host separator і filesystem order не впливають на identity. Exact SHA-256 copies не зливаються: кожен source file має окремі document/image IDs, а 90 additional copies посилаються через `duplicateOfDocumentId` і `duplicateOfImageId` на lexicographically first NFC/POSIX source path.
+
+Validator перевіряє unique IDs, complete source-image coverage, існування/size/SHA-256 source files, canonical enum/status values, continent/entity/document/image references, deterministic IDs and ordering, duplicate representatives, summary counts, aliases та quiz eligibility. `UNKNOWN`, unresolved entity/type/geography conflicts і conflicting duplicate groups не можуть потрапити до quiz pool.
+
+Manifest підтримує primary і alternate continent IDs, але наявний `Country` domain record має лише один `continentId`. До SQLite integration потрібне окреме рішення: зберегти primary continent для основного маршруту та додати many-to-many relation для Cyprus, Turkey, Timor-Leste і майбутніх transcontinental cases. Stage 5 не змінює `Country`, не створює SQLite schema і не інтегрує catalogue в application UI.

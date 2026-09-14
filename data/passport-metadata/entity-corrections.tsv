@@ -1,0 +1,44 @@
+sourceKey	canonicalKey	displayNameUk	entityType	primaryContinentId	alternateContinentIds	reviewStatus	notes
+аззербайджан	азербайджан	Азербайджан	COUNTRY	continent:asia		AUTO_CLASSIFIED	Corrected source spelling; physical copies also occur under Africa.
+афганістан				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+бангладеш				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+бруней				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa and nested under Benin.
+бутан				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+в'єтнам				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+вірменія				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+катар				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa; one duplicate group has a type conflict.
+королівство бахрейн	бахрейн	Бахрейн	COUNTRY	continent:asia		AUTO_CLASSIFIED	Normalized formal source name; physical copies also occur under Africa.
+кіпр		Кіпр	COUNTRY	continent:europe	continent:asia	NEEDS_REVIEW	Present under Europe, Asia and Africa; primary continent requires product decision.
+м'янма				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+макао		Макао	TERRITORY	continent:asia		AUTO_CLASSIFIED	Territory rather than sovereign country; physical copies also occur under Africa.
+малайзія				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+мальдіви				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa; African NATIONAL_ID has no exact Asian copy.
+непал				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+оае	об'єднані арабські емірати	Об'єднані Арабські Емірати	COUNTRY	continent:asia		AUTO_CLASSIFIED	Expanded source abbreviation; physical copies also occur under Africa.
+оман				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa; one duplicate group has a type conflict.
+пакистан				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa; one duplicate group has a type conflict.
+північний кіпр		Північний Кіпр	DISPUTED_ENTITY	continent:asia		NEEDS_REVIEW	Disputed entity; physical copies also occur under Africa.
+саудівська аравія				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+сингапур				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+сирія				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+таджикістан				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+тайвань		Тайвань	DISPUTED_ENTITY	continent:asia		NEEDS_REVIEW	Geopolitical status requires an explicit product decision; physical copies also occur under Africa.
+таїланд				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+туреччина		Туреччина	COUNTRY	continent:asia	continent:europe	NEEDS_REVIEW	Transcontinental entity; physical copies also occur under Africa.
+туркменістан				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+узбекистан				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+філіпіни				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+шрі ланк	шрі-ланка	Шрі-Ланка	COUNTRY	continent:asia		AUTO_CLASSIFIED	Corrected truncated source name; physical copies also occur under Africa.
+ємен				continent:asia		AUTO_CLASSIFIED	Physical copies also occur under Africa.
+корея	корея невизначена	Корея (неуточнено)	AMBIGUOUS_ENTITY	continent:asia		NEEDS_REVIEW	Exact duplicates link this source name with Korea Yaka; state cannot be determined.
+корея яка	корея невизначена	Корея (неуточнено)	AMBIGUOUS_ENTITY	continent:asia		NEEDS_REVIEW	Damaged source name; exact duplicates link it with Korea.
+македонія	північна македонія	Північна Македонія	COUNTRY	continent:europe		NEEDS_REVIEW	May represent an historical name or a distinct document generation.
+північна македонія		Північна Македонія	COUNTRY	continent:europe		NEEDS_REVIEW	Double-space source variant merged with Macedonia pending document review.
+ботсавата	ботсвана	Ботсвана	COUNTRY	continent:africa		AUTO_CLASSIFIED	Corrected source spelling.
+бермудські острови	бермуди	Бермуди	TERRITORY	continent:north-america		NEEDS_REVIEW	Physical source is under Europe; canonical geography corrected conservatively.
+південна африка		Південна Африка	COUNTRY	continent:africa		AUTO_CLASSIFIED	Physical source is incorrectly under South America.
+нова гвінея	папуа-нова гвінея	Папуа-Нова Гвінея	COUNTRY	continent:oceania		NEEDS_REVIEW	Source name is ambiguous and requires confirmation.
+свазіленд	есватіні	Есватіні	COUNTRY	continent:africa		AUTO_CLASSIFIED	Canonical modern display name; original name remains an alias.
+східний тимор	тімор-лешті	Тімор-Лешті	COUNTRY	continent:asia	continent:oceania	NEEDS_REVIEW	Source is under Oceania; primary continent requires product decision.
+сомаліленд		Сомаліленд	DISPUTED_ENTITY	continent:africa		NEEDS_REVIEW	Disputed entity requires an explicit product decision.
+група африканського банку розвитку		Група Африканського банку розвитку	ORGANIZATION	continent:africa		AUTO_CLASSIFIED	Passport-issuing organization rather than a country.

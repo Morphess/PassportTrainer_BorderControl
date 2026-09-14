@@ -18,9 +18,9 @@ The roadmap preserves the established architecture and product scope. Details re
 - **Primary result:** explicitly decided domain contracts and enforced quiz-session invariants with focused behavioral verification.
 - **Dependencies:** Stage 4B rules and the current architecture baseline.
 
-## 3. Canonical passport manifest
+## 3. Canonical passport manifest — Stage 5
 
-- **Status:** Next.
+- **Status:** Completed in Stage 5.
 
 - **Goal:** create a reviewed, machine-readable mapping from immutable source paths to canonical countries/entities and document types.
 - **Primary result:** a versioned manifest that preserves source traceability and separates accepted records from ambiguous data.
@@ -28,9 +28,11 @@ The roadmap preserves the established architecture and product scope. Details re
 
 ## 4. SQLite catalogue and repository implementations
 
+- **Status:** Next.
+
 - **Goal:** provide persistent catalogue access behind existing repository boundaries.
 - **Primary result:** an approved SQLite catalogue, migrations, and working country/passport repository implementations populated from the canonical manifest.
-- **Dependencies:** Stage 3 manifest and a separate accepted database-design decision.
+- **Dependencies:** completed Stage 5 manifest and a separate accepted database-design decision.
 
 ## 5. Country/passport catalogue UI
 

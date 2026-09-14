@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Цей документ фіксує межі компонентів; повна бізнес-логіка, SQL-схема та імпорт паспортної бази належать наступним етапам.
+Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Цей документ фіксує межі компонентів; Stage 5 реалізував окремий read-only manifest pipeline, тоді як повна бізнес-логіка, SQL-схема та імпорт manifest у SQLite належать наступним етапам.
 
 ## Шари та дозволені залежності
 
@@ -100,6 +100,14 @@ UNKNOWN
 
 Ці значення описують чотири підтверджені dataset-класи та невизначений тип. Початкові назви й псевдоніми на кшталт `ззп`, `ДП`, `СП`, `id` не є enum-значеннями. Окремі `TEMPORARY` або `OTHER` не вводяться без підтверджених продуктових чи dataset-вимог; неоднозначний запис залишається `UNKNOWN` до ручної перевірки.
 
+## Canonical manifest tooling
+
+`ua.passporttrainer.manifest` є JDK-only tooling boundary між immutable source assets і майбутнім SQLite catalogue. `PassportManifestGenerator` читає source collection та versioned TSV corrections, створює deterministic normalized TSV catalogue і не записує нічого в source directory. `PassportManifestValidator` перевіряє stable IDs, source paths, enum/status contracts, references, duplicate relationships, ordering та quiz eligibility.
+
+Generated catalogue нормалізовано за рівнями continent, entity, document та image. Exact duplicate files залишаються окремими records і посилаються на deterministic representative. `VERIFIED`, `AUTO_CLASSIFIED`, `NEEDS_REVIEW`, `EXCLUDED` є повним review-status contract; `quizEligible=true` дозволено лише для `VERIFIED` document/entity з відомим `DocumentType`.
+
+Manifest зберігає primary та alternate continent IDs. Поточний `Country` record залишається без змін; перед SQLite integration потрібне окреме рішення щодо many-to-many geographic relation для transcontinental entities.
+
 ## Repository contracts
 
 | Repository | Відповідальність |
@@ -176,12 +184,12 @@ Service locator і глобальні mutable singleton-об'єкти не пл�
 - controller тести підмінятимуть сервіси;
 - navigation smoke-тест перевіряє наявність FXML, а повний UI-запуск перевіряється окремо;
 - `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model.
+- manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
 
 ## Що навмисно не реалізовано
 
-- SQL-схема та міграції;
-- SQLite repository-реалізації;
-- імпорт і канонізація бази паспортів;
+- SQLite schema and migrations;
+- SQLite repository implementations and ingestion of the canonical manifest;
 - генератори навчальних та екзаменаційних запитань;
 - конкретний password hashing algorithm;
 - повні екрани й переходи між ними;
