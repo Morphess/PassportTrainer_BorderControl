@@ -55,6 +55,7 @@ class SQLiteCatalogueRepositoryTest {
         assertEquals("continent:europe", ukraine.continentId());
         assertEquals(EntityType.COUNTRY, ukraine.entityType());
         assertEquals(ReviewStatus.AUTO_CLASSIFIED, ukraine.reviewStatus());
+        assertEquals(passportRepository.findByCountryId(ukraine.id()).size(), ukraine.documentCount());
         assertEquals(ukraine, countryRepository.findById(ukraine.id()).orElseThrow());
         assertTrue(countryRepository.findByIsoAlpha2("UA").isEmpty());
     }

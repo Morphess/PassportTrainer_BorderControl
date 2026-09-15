@@ -22,10 +22,13 @@ import java.util.Optional;
 public final class SQLiteCountryRepository implements CountryRepository {
 
     private static final String SELECT_COUNTRY = "SELECT e.id, primary_geography.continent_id, e.iso_alpha2, "
-            + "e.iso_alpha3, e.display_name_uk, e.entity_type, e.review_status, n.source_name FROM entities e "
+            + "e.iso_alpha3, e.display_name_uk, e.entity_type, e.review_status, n.source_name, "
+            + "COALESCE(document_counts.document_count, 0) AS document_count FROM entities e "
             + "JOIN entity_continents primary_geography "
             + "ON primary_geography.entity_id = e.id AND primary_geography.is_primary = 1 "
-            + "JOIN entity_source_names n ON n.entity_id = e.id AND n.sort_order = 0";
+            + "JOIN entity_source_names n ON n.entity_id = e.id AND n.sort_order = 0 "
+            + "LEFT JOIN (SELECT entity_id, COUNT(*) AS document_count FROM documents "
+            + "GROUP BY entity_id) document_counts ON document_counts.entity_id = e.id";
 
     private final DatabaseConnectionProvider connectionProvider;
 
@@ -113,7 +116,8 @@ public final class SQLiteCountryRepository implements CountryRepository {
                 resultSet.getString("display_name_uk"),
                 resultSet.getString("source_name"),
                 EntityType.valueOf(resultSet.getString("entity_type")),
-                ReviewStatus.valueOf(resultSet.getString("review_status"))
+                ReviewStatus.valueOf(resultSet.getString("review_status")),
+                resultSet.getInt("document_count")
         );
     }
 }

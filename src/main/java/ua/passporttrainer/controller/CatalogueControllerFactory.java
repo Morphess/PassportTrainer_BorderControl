@@ -1,6 +1,10 @@
 package ua.passporttrainer.controller;
 
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
+import ua.passporttrainer.map.MapDataException;
+import ua.passporttrainer.map.WorldMapDefinition;
+import ua.passporttrainer.map.WorldMapResourceLoader;
+import ua.passporttrainer.map.WorldMapValidator;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.navigation.NavigationControllerFactory;
 import ua.passporttrainer.navigation.NavigationService;
@@ -13,17 +17,26 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
 
     private final CatalogueApplicationContext catalogueContext;
     private final Throwable catalogueFailure;
+    private final WorldMapDefinition mapDefinition;
+    private final ResourceBundle regionLabels;
+    private final Throwable mapFailure;
     private final PassportImageLocator imageLocator;
     private final ResourceBundle resources;
 
     private CatalogueControllerFactory(
             CatalogueApplicationContext catalogueContext,
             Throwable catalogueFailure,
+            WorldMapDefinition mapDefinition,
+            ResourceBundle regionLabels,
+            Throwable mapFailure,
             PassportImageLocator imageLocator,
             ResourceBundle resources
     ) {
         this.catalogueContext = catalogueContext;
         this.catalogueFailure = catalogueFailure;
+        this.mapDefinition = mapDefinition;
+        this.regionLabels = regionLabels;
+        this.mapFailure = mapFailure;
         this.imageLocator = Objects.requireNonNull(imageLocator, "imageLocator");
         this.resources = Objects.requireNonNull(resources, "resources");
     }
@@ -33,8 +46,25 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
             PassportImageLocator imageLocator,
             ResourceBundle resources
     ) {
+        Objects.requireNonNull(catalogueContext, "catalogueContext");
+        WorldMapDefinition mapDefinition = null;
+        ResourceBundle regionLabels = null;
+        Throwable mapFailure = null;
+        try {
+            mapDefinition = WorldMapResourceLoader.loadDefault();
+            regionLabels = ResourceBundle.getBundle("i18n.map-regions");
+            WorldMapValidator.validate(
+                    mapDefinition,
+                    catalogueContext.countryService(),
+                    catalogueContext.continentService(),
+                    resources,
+                    regionLabels
+            );
+        } catch (RuntimeException exception) {
+            mapFailure = exception;
+        }
         return new CatalogueControllerFactory(
-                Objects.requireNonNull(catalogueContext, "catalogueContext"), null, imageLocator, resources
+                catalogueContext, null, mapDefinition, regionLabels, mapFailure, imageLocator, resources
         );
     }
 
@@ -43,8 +73,9 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
             PassportImageLocator imageLocator,
             ResourceBundle resources
     ) {
+        Throwable failure = Objects.requireNonNull(catalogueFailure, "catalogueFailure");
         return new CatalogueControllerFactory(
-                null, Objects.requireNonNull(catalogueFailure, "catalogueFailure"), imageLocator, resources
+                null, failure, null, null, failure, imageLocator, resources
         );
     }
 
@@ -53,12 +84,24 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
         Objects.requireNonNull(controllerType, "controllerType");
         Objects.requireNonNull(navigationService, "navigationService");
         if (controllerType == StartController.class) {
-            return new StartController(navigationService, catalogueContext != null, resources);
+            return new StartController(
+                    navigationService, catalogueContext != null, mapDefinition != null && mapFailure == null, resources
+            );
         }
         CatalogueApplicationContext context = requireCatalogue();
         if (controllerType == CatalogueController.class) {
             return new CatalogueController(
                     navigationService, context.continentService(), context.countryService(), resources
+            );
+        }
+        if (controllerType == WorldMapController.class) {
+            requireMap();
+            return new WorldMapController(
+                    navigationService,
+                    context.countryService(),
+                    mapDefinition,
+                    resources,
+                    regionLabels
             );
         }
         if (controllerType == PassportListController.class) {
@@ -79,5 +122,11 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
             throw new IllegalStateException("Catalogue is unavailable", catalogueFailure);
         }
         return catalogueContext;
+    }
+
+    private void requireMap() {
+        if (mapDefinition == null || regionLabels == null || mapFailure != null) {
+            throw new MapDataException("World map is unavailable", mapFailure);
+        }
     }
 }

@@ -94,3 +94,85 @@
 .button:disabled {
     -fx-opacity: 0.48;
 }
+
+.map-instructions {
+    -fx-font-size: 13px;
+    -fx-text-fill: #cbd5e1;
+}
+
+.map-content-split {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+.map-content-split > .split-pane-divider {
+    -fx-background-color: transparent;
+    -fx-padding: 0 5px;
+}
+
+.map-panel,
+.map-list-panel {
+    -fx-background-insets: 0;
+}
+
+.map-host {
+    -fx-background-color: #091321;
+    -fx-background-radius: 8px;
+    -fx-border-color: #475569;
+    -fx-border-radius: 8px;
+}
+
+.world-map-pane {
+    -fx-background-color: linear-gradient(to bottom, #0b1e33, #102940);
+    -fx-background-radius: 8px;
+}
+
+.map-region {
+    -fx-fill: #64748b;
+    -fx-stroke: #0f172a;
+    -fx-stroke-width: 5;
+}
+
+.map-region:linked {
+    -fx-fill: #2563eb;
+    -fx-cursor: hand;
+}
+
+.map-region:no-data {
+    -fx-fill: #475569;
+}
+
+.map-region:needs-review {
+    -fx-fill: #b7791f;
+}
+
+.map-region:outside-group {
+    -fx-opacity: 0.2;
+}
+
+.map-region:hovered {
+    -fx-fill: #38bdf8;
+    -fx-stroke: #e0f2fe;
+    -fx-stroke-width: 9;
+}
+
+.map-region:focused {
+    -fx-stroke: #f8fafc;
+    -fx-stroke-width: 11;
+}
+
+.map-region:selected {
+    -fx-fill: #facc15;
+    -fx-stroke: #fef3c7;
+    -fx-stroke-width: 11;
+    -fx-opacity: 1;
+}
+
+.map-group-button:selected {
+    -fx-background-color: #0ea5e9;
+    -fx-font-weight: bold;
+}
+
+.map-selection-label {
+    -fx-min-height: 22px;
+}

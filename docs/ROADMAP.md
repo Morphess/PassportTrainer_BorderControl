@@ -44,13 +44,14 @@ The roadmap preserves the established architecture and product scope. Details re
 - **Delivered:** explicit constructor-injected controller creation, instance-local back navigation, seven canonical continents with membership counts, Unicode search, entity/review classification, complete document listings, real image loading with portable path containment, loading/error states, and multi-image controls.
 - **Dependencies:** completed Stage 6 catalogue access and established navigation conventions.
 
-## 6. Interactive world map
+## 6. Interactive world map — Stage 8
 
-- **Status:** Next.
+- **Status:** Completed in Stage 8.
 
 - **Goal:** support continent and country selection through an interactive map without replacing catalogue navigation.
-- **Primary result:** a clickable world-map flow connected to canonical country data and the implemented passport catalogue screens.
-- **Dependencies:** Stage 7 catalogue navigation plus an approved map asset and interaction design.
+- **Primary result:** START → interactive world map or fallback list → existing document list → image details, using the same canonical entity IDs and navigation stack as Stage 7.
+- **Delivered:** reproducibly generated Natural Earth 5.1.1 Ukraine-POV Robinson SVG; 249 stable `ADM0_A3` regions; explicit versioned mappings for 135 linked and 114 intentionally unlinked regions; explicit list-only coverage for the remaining 4 of 139 canonical entities; strict SVG/TSV integrity validation; six presentation groups over seven canonical continents; native JavaFX hover, selection, bounded zoom/pan/reset, continent focus, keyboard access, Unicode fallback search, document counts, and graceful map-unavailable fallback to the Stage 7 catalogue.
+- **Dependencies:** completed Stage 7 catalogue navigation and the approved Stage 8 map asset and interaction design.
 
 ## 7. Quiz generation engine
 

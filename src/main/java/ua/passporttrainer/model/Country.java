@@ -11,6 +11,12 @@ public record Country(
         String displayName,
         String sourceName,
         EntityType entityType,
-        ReviewStatus reviewStatus
+        ReviewStatus reviewStatus,
+        int documentCount
 ) {
+    public Country {
+        if (documentCount < 0) {
+            throw new IllegalArgumentException("documentCount must not be negative");
+        }
+    }
 }

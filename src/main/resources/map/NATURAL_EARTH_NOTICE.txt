@@ -1,0 +1,64 @@
+Passport Trainer world map geometry
+===================================
+
+Source dataset
+--------------
+Natural Earth Admin 0 - Countries, Ukraine point of view
+Dataset stem: ne_10m_admin_0_countries_ukr
+Dataset version: 5.1.1
+Natural Earth repository tag: v5.1.2
+Natural Earth release commit: f1890d9f152c896d250a77557a5751a93d494776
+Source directory: 10m_cultural/
+Source repository: https://github.com/nvkelso/natural-earth-vector
+Point-of-view documentation:
+https://www.naturalearthdata.com/blog/admin-0-countries-point-of-views/
+
+Verified source SHA-256
+----------------------
+ec923b81a27e36efce7bb293c45ce87134f967330ef137d04e1be9c4940b6d82  ne_10m_admin_0_countries_ukr.shp
+e5f658ee031f8492f109d4f46455f5171175bc0669b02c2e79be0438154d6647  ne_10m_admin_0_countries_ukr.shx
+4fe3184c24f5cb7516aee1c20ebc6326a3ad6c2158cf844bcb5a1620c3670862  ne_10m_admin_0_countries_ukr.dbf
+a02a27b1d1982c8516d83398e85a3c8b1aef1713c13ef4d84d7bde17430c07c4  ne_10m_admin_0_countries_ukr.prj
+f9893302cd3158f3b5aea394dcd2a91574869e9e6ff69e9235b10a3bf8c983fb  ne_10m_admin_0_countries_ukr.VERSION.txt
+
+License
+-------
+All Natural Earth raster and vector map data is public domain. Permission and
+attribution are not required for personal, educational, or commercial use,
+modification, or electronic redistribution.
+
+Terms: https://www.naturalearthdata.com/about/terms-of-use/
+Suggested credit retained by this project: Made with Natural Earth.
+
+Generation
+----------
+The versioned generator is tools/map/generate-world-map.sh.
+It downloads and verifies the exact source files above and invokes:
+
+npx --yes mapshaper@0.7.61 \
+  ne_10m_admin_0_countries_ukr.shp \
+  -clean \
+  -simplify weighted 15% keep-shapes \
+  -proj robin \
+  -each 'svg_id="region-"+ADM0_A3' \
+  -o format=svg id-field=svg_id width=10000 world-map.svg
+
+Mapshaper 0.7.61 is an offline generation tool only. It is not a Maven or
+runtime dependency and is not bundled with the application. Mapshaper source is
+licensed under MPL-2.0: https://github.com/mbloch/mapshaper/blob/master/LICENSE
+
+Generated runtime asset
+-----------------------
+File: src/main/resources/map/world-map.svg
+Projection: Robinson
+Simplification: topology-aware weighted 15%, keep-shapes
+Natural Earth features retained: 249 of 249
+SVG region IDs: 249 unique region-<ADM0_A3> values
+SVG subpaths: 1,976
+SVG coordinate pairs: 90,640
+SVG size: 1,415,568 bytes
+SVG SHA-256: 5d329b83c0f51b0996519f0fd62073aaf296a3f8013bdcdd73ec2efa80a79ee8
+
+The selected Ukraine point-of-view is intentional. The generated asset hash,
+region count, and high-risk mapping tests guard against accidental replacement
+with Natural Earth's default de facto country geometry.

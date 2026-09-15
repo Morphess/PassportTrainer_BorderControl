@@ -16,6 +16,7 @@ public final class StartController {
 
     private final NavigationService navigationService;
     private final boolean catalogueAvailable;
+    private final boolean mapAvailable;
     private final ResourceBundle resources;
 
     @FXML
@@ -23,17 +24,25 @@ public final class StartController {
 
     @FXML
     private Label statusLabel;
+    @FXML
+    private Label mapStatusLabel;
+
 
     @FXML
     private Button catalogueButton;
+    @FXML
+    private Button mapButton;
+
 
     public StartController(
             NavigationService navigationService,
             boolean catalogueAvailable,
+            boolean mapAvailable,
             ResourceBundle resources
     ) {
         this.navigationService = Objects.requireNonNull(navigationService, "navigationService");
         this.catalogueAvailable = catalogueAvailable;
+        this.mapAvailable = mapAvailable;
         this.resources = Objects.requireNonNull(resources, "resources");
     }
 
@@ -41,15 +50,31 @@ public final class StartController {
     private void initialize() {
         Objects.requireNonNull(titleLabel, "titleLabel was not injected");
         Objects.requireNonNull(statusLabel, "statusLabel was not injected");
+        Objects.requireNonNull(mapStatusLabel, "mapStatusLabel was not injected");
         Objects.requireNonNull(catalogueButton, "catalogueButton was not injected");
+        Objects.requireNonNull(mapButton, "mapButton was not injected");
         catalogueButton.setDisable(!catalogueAvailable);
+        mapButton.setDisable(!mapAvailable);
         statusLabel.setText(resources.getString(
                 catalogueAvailable ? "start.catalogueReady" : "error.catalogueUnavailable"
+        ));
+        mapStatusLabel.setText(resources.getString(
+                mapAvailable ? "start.mapReady" : "error.mapUnavailable"
         ));
         if (!catalogueAvailable) {
             statusLabel.getStyleClass().add("error-label");
         }
+        if (!mapAvailable) {
+            mapStatusLabel.getStyleClass().add("error-label");
+        }
     }
+    @FXML
+    private void openWorldMap() {
+        if (mapAvailable) {
+            navigationService.show(View.WORLD_MAP);
+        }
+    }
+
 
     @FXML
     private void openCatalogue() {

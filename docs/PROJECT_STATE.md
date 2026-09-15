@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after Stage 7. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after Stage 8. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -21,6 +21,10 @@ This document records the repository state after Stage 7. It distinguishes imple
 - Early Maven Enforcer guard requiring JDK 25 or newer.
 - JavaFX development launch through `exec-maven-plugin` and the existing `Launcher`.
 - JavaFX catalogue flow from START through continent/entity selection, document selection, and passport-image details, with back navigation between every screen.
+- JavaFX interactive-map flow from START through map or fallback entity selection into the existing document and passport-image screens, with the same instance-local back navigation.
+- A reproducibly generated Natural Earth 5.1.1 Ukraine-POV Robinson SVG with 249 unique `ADM0_A3` region IDs, pinned source/output hashes, retained public-domain notice, and an offline `mapshaper@0.7.61` generation tool.
+- Strict map resource loading and validation covering 249 geometry records, 135 explicit canonical links, 114 intentionally unlinked geographic regions, and 4 list-only entities so that all 139 canonical entities remain reachable without runtime name matching.
+- Native JavaFX map interaction with six presentation groups over the seven canonical continents, continent focus, hover/review/no-data/selection states, bounded zoom and pan, reset, keyboard activation, Unicode fallback search, and localized tooltips.
 - Central FXML loading, constructor-injected controller creation, scene-root replacement, shared CSS, and instance-local navigation history through `NavigationService`.
 - JDK-only domain records and enums for countries, passports, users, quiz sessions, answers, and results; catalogue identities use the stable Stage 5 text IDs, while `EntityType` and `ReviewStatus` expose persisted catalogue classification honestly to the UI.
 - The authoritative `DocumentType` contract is `ORDINARY_PASSPORT`, `DIPLOMATIC_PASSPORT`, `SERVICE_PASSPORT`, `NATIONAL_ID`, and `UNKNOWN`.
@@ -28,14 +32,14 @@ This document records the repository state after Stage 7. It distinguishes imple
 - Service-layer classes using constructor injection, including catalogue browsing by canonical continent membership.
 - `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
 - In-memory quiz-session lifecycle with validated questions, unique question IDs and answer options, one answer per question, immutable completion, bounded scores, and examination-only result-save delegation.
-- Seventy-three JUnit tests, including isolated SQLite integration, Unicode search, portable image resolution, FXML loading, catalogue navigation, error-state, real image-decoding, and multi-image paging coverage.
+- Ninety-one JUnit tests, including isolated SQLite integration, Unicode search, map integrity/completeness, high-risk geopolitical mappings, viewport and interaction boundaries, independent map-failure fallback, FXML loading, complete map/catalogue navigation, portable image resolution, real image decoding, and multi-image paging.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
 - The verified source passport dataset audit and Stage 5 manifest decisions in `docs/database-analysis.md`.
 - A checksummed version-1 SQLite migration for normalized catalogue metadata, continents, entities, geography, documents, images, aliases, review state, eligibility, and duplicate relationships.
 - A deterministic transactional importer that consumes only the validated Stage 5 manifest, plus post-import database validation and an ordered logical catalogue fingerprint.
-- Working `SQLiteContinentRepository`, `SQLiteCountryRepository`, and `SQLitePassportRepository` implementations behind repository boundaries, with canonical `String` IDs, alternate geography, review status, and image counts.
+- Working `SQLiteContinentRepository`, `SQLiteCountryRepository`, and `SQLitePassportRepository` implementations behind repository boundaries, with canonical `String` IDs, alternate geography, review status, aggregate entity document counts, and image counts.
 - A non-JavaFX `CatalogueApplicationContext` that validates a read-only catalogue and wires all three SQLite repositories into `ContinentService`, `CountryService`, and `PassportService`.
 - A deterministic generated development catalogue at `data/passport-catalogue/passport-catalogue.sqlite`; its ordered logical SHA-256 is `279f2ecb5f1d09fe66e266560e0c323246a4b44909b00412cf8336eb2c2a7093`.
 - Portable runtime location configuration through `passporttrainer.catalogue.path` and `passporttrainer.assets.root`, with repository-relative development defaults and image containment checks.
@@ -47,11 +51,10 @@ This document records the repository state after Stage 7. It distinguishes imple
 - Quiz session creation, answer submission, completion, and result construction enforce domain invariants, but question generation and mode-specific rules do not exist.
 - Learning, training, and examination are represented by `QuizMode`, but their behavior is not differentiated.
 - Authentication, settings, and statistics have service and repository boundaries but no persistence implementations or UI flows.
-- Localization infrastructure covers the implemented catalogue flow in the default resource bundle; additional locales are not present.
+- Localization infrastructure covers the implemented catalogue and interactive-map flows in the default resource bundles; additional locales are not present.
 
 ### Not implemented
 
-- Interactive world map and country selection.
 - Country-identification and document-type question generation.
 - Random question and answer-option generation.
 - Complete learning, training, and examination behavior.
@@ -143,6 +146,15 @@ Stage 7 verification established that:
 - the actual JavaFX surface rendered canonical catalogue data and a source passport image with preserved aspect ratio;
 - all 73 tests pass and the application development command reaches a live JavaFX window.
 
+Stage 8 verification established that:
+
+- the checked-in Natural Earth asset reproduces from the pinned Ukraine-POV source and `mapshaper@0.7.61` to the expected SHA-256;
+- strict XML security, asset integrity, SVG/metadata identity equality, exact canonical coverage, list-only exclusions, and high-risk mappings fail closed;
+- the native JavaFX surface builds 249 paths, supports bounded viewport and interaction state, and retains list access for unlinked or geometry-less catalogue entities;
+- START → world map → map/list entity selection → existing passport documents → back navigation is exercised on a graphical JavaFX toolkit, including keyboard activation and Unicode-normalized search;
+- the early performance gate measured 109 ms resource loading, 271 ms path construction, 44 ms first layout, and a 12 MiB heap delta on the development workstation;
+- all 91 tests pass, `./mvnw package` succeeds, and the standard development command reaches a live JavaFX process.
+
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
@@ -153,7 +165,7 @@ Stage 7 verification established that:
 
 ### Passport dataset state
 
-`Зразки паспортних документів/` remains the unchanged source dataset. Stage 5 tooling scans it, Stage 6 imports the canonical manifest without reading or classifying source assets, and Stage 7 only resolves catalogue-provided relative image paths below a configured read-only root.
+`Зразки паспортних документів/` remains the unchanged source dataset. Stage 5 tooling scans it, Stage 6 imports the canonical manifest without reading or classifying source assets, and Stages 7–8 only resolve catalogue-provided relative image paths below a configured read-only root.
 
 The repeated audit and generated manifest record:
 
@@ -174,8 +186,8 @@ Source files must remain unchanged. SQLite catalogue ingestion consumes the cano
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 adds only catalogue presentation, minimal read APIs, runtime wiring, tests, a generated development catalogue, and factual documentation.
+- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 adds only the reproducible map asset, explicit map metadata, map presentation/runtime wiring, the minimal document-count projection, tests, and factual documentation.
 
 ### Immediate next step
 
-Stage 7 completed the country/passport catalogue UI. The immediate next stage is Interactive World Map. Quiz generation, learning/training/examination modes, authentication, statistics, mutable user persistence, review editing, and Windows packaging remain later stages.
+Stage 8 completed the interactive world-map flow. Quiz generation, learning/training/examination modes, authentication, statistics, mutable user persistence, review editing, and Windows packaging remain later stages and are not implemented.

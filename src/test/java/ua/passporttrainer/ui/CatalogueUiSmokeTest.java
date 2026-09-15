@@ -1,13 +1,22 @@
 package ua.passporttrainer.ui;
 
+import javafx.css.PseudoClass;
 import javafx.application.Platform;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.ToggleButton;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
+import javafx.scene.input.MouseEvent;
+import javafx.scene.layout.FlowPane;
+import javafx.scene.layout.StackPane;
+import javafx.scene.shape.SVGPath;
 import javafx.stage.Stage;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -19,6 +28,7 @@ import ua.passporttrainer.controller.CatalogueControllerFactory;
 import ua.passporttrainer.controller.PassportDetailsController;
 import ua.passporttrainer.controller.PassportListController;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
+import ua.passporttrainer.map.WorldMapPane;
 import ua.passporttrainer.model.Country;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
@@ -27,8 +37,10 @@ import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.repository.PassportRepository;
 import ua.passporttrainer.service.PassportService;
 
+import java.text.Normalizer;
 import java.nio.file.Path;
 import java.sql.SQLException;
+import java.util.Enumeration;
 import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
@@ -353,6 +365,137 @@ class CatalogueUiSmokeTest {
     }
 
     @Test
+    void browsesInteractiveMapFallbackListAndExistingPassportFlow() throws Exception {
+        Path database = temporaryDirectory.resolve("world-map-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                        context,
+                        new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        RESOURCES
+                );
+                NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+                navigation.show(View.START);
+                stage.show();
+
+                Parent startRoot = stage.getScene().getRoot();
+                Button mapButton = control(startRoot, "#mapButton", Button.class);
+                assertFalse(mapButton.isDisabled());
+                mapButton.fire();
+
+                Parent mapRoot = stage.getScene().getRoot();
+                mapRoot.applyCss();
+                mapRoot.layout();
+                StackPane mapHost = control(mapRoot, "#mapHost", StackPane.class);
+                WorldMapPane mapPane = (WorldMapPane) mapHost.getChildren().getFirst();
+                ListView<?> entities = control(mapRoot, "#entityList", ListView.class);
+                TextField search = control(mapRoot, "#searchField", TextField.class);
+                assertEquals(249, mapPane.regionCount());
+                assertEquals(139, entities.getItems().size());
+                assertEquals(6, control(mapRoot, "#groupButtons", FlowPane.class).getChildren().size());
+                assertTrue(mapPane.isFocusTraversable());
+
+                ToggleButton asia = control(mapRoot, "#mapGroup-ASIA", ToggleButton.class);
+                asia.fire();
+                assertEquals("ASIA", mapPane.activeGroupId());
+                assertTrue(entities.getItems().stream()
+                        .map(Country.class::cast)
+                        .anyMatch(country -> country.displayName().equals("Корея (неуточнено)")));
+
+                control(mapRoot, "#resetMapButton", Button.class).fire();
+                assertEquals(1.0, mapPane.viewportState().zoom());
+                search.setText(Normalizer.normalize("уКрАїНа", Normalizer.Form.NFD));
+                assertEquals(1, entities.getItems().size());
+                assertEquals("Україна", ((Country) entities.getItems().getFirst()).displayName());
+                search.clear();
+
+                SVGPath ukraine = mapPane.regionNode("UKR");
+                ukraine.getOnMouseEntered().handle(mouseEvent(MouseEvent.MOUSE_ENTERED, MouseButton.NONE, 0));
+                assertTrue(ukraine.getPseudoClassStates().contains(PseudoClass.getPseudoClass("hovered")));
+                ukraine.getOnMouseClicked().handle(mouseEvent(MouseEvent.MOUSE_CLICKED, MouseButton.PRIMARY, 1));
+                assertEquals(
+                        "Україна",
+                        ((Country) entities.getSelectionModel().getSelectedItem()).displayName()
+                );
+                assertTrue(ukraine.getPseudoClassStates().contains(PseudoClass.getPseudoClass("selected")));
+                assertEquals(javafx.scene.AccessibleRole.BUTTON, ukraine.getAccessibleRole());
+
+                double zoomBefore = mapPane.viewportState().zoom();
+                control(mapRoot, "#zoomInButton", Button.class).fire();
+                assertTrue(mapPane.viewportState().zoom() > zoomBefore);
+
+                SVGPath cyprus = mapPane.regionNode("CYP");
+                cyprus.getOnKeyPressed().handle(new KeyEvent(
+                        KeyEvent.KEY_PRESSED, "", "", KeyCode.ENTER, false, false, false, false
+                ));
+                assertEquals(
+                        "Кіпр",
+                        ((Country) entities.getSelectionModel().getSelectedItem()).displayName()
+                );
+                SVGPath aruba = mapPane.regionNode("ABW");
+                aruba.getOnMouseClicked().handle(mouseEvent(MouseEvent.MOUSE_CLICKED, MouseButton.PRIMARY, 1));
+                assertEquals(
+                        "Кіпр",
+                        ((Country) entities.getSelectionModel().getSelectedItem()).displayName()
+                );
+                assertEquals(javafx.scene.AccessibleRole.NODE, aruba.getAccessibleRole());
+
+                asia.fire();
+                search.setText("Північний Кіпр");
+                assertEquals(1, entities.getItems().size());
+                entities.getSelectionModel().selectFirst();
+                control(mapRoot, "#openButton", Button.class).fire();
+                Parent passportsRoot = stage.getScene().getRoot();
+                assertFalse(control(passportsRoot, "#documentList", ListView.class).getItems().isEmpty());
+                navigation.goBack();
+                assertSame(mapRoot, stage.getScene().getRoot());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void keepsCatalogueAvailableWhenMapValidationFails() throws Exception {
+        Path database = temporaryDirectory.resolve("map-unavailable-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                        context,
+                        new FileSystemPassportImageLocator(temporaryDirectory),
+                        resourcesWithoutMapGroupLabel()
+                );
+                NavigationService navigation = new NavigationService(
+                        stage, resourcesWithoutMapGroupLabel(), factory
+                );
+                navigation.show(View.START);
+                stage.show();
+
+                Parent startRoot = stage.getScene().getRoot();
+                assertFalse(control(startRoot, "#catalogueButton", Button.class).isDisabled());
+                assertTrue(control(startRoot, "#mapButton", Button.class).isDisabled());
+                assertEquals(
+                        RESOURCES.getString("error.mapUnavailable"),
+                        control(startRoot, "#mapStatusLabel", Label.class).getText()
+                );
+                control(startRoot, "#catalogueButton", Button.class).fire();
+                Parent catalogueRoot = stage.getScene().getRoot();
+                assertNotNull(control(catalogueRoot, "#continentList", ListView.class));
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
     void disablesCatalogueEntryWhenReadOnlyCatalogueCannotOpen() throws Exception {
         onFxThread(() -> {
             Stage stage = new Stage();
@@ -367,14 +510,57 @@ class CatalogueUiSmokeTest {
 
                 Parent root = stage.getScene().getRoot();
                 assertTrue(control(root, "#catalogueButton", Button.class).isDisabled());
+                assertTrue(control(root, "#mapButton", Button.class).isDisabled());
                 assertEquals(
                         RESOURCES.getString("error.catalogueUnavailable"),
                         control(root, "#statusLabel", Label.class).getText()
+                );
+                assertEquals(
+                        RESOURCES.getString("error.mapUnavailable"),
+                        control(root, "#mapStatusLabel", Label.class).getText()
                 );
             } finally {
                 stage.close();
             }
         });
+    }
+
+    private static ResourceBundle resourcesWithoutMapGroupLabel() {
+        return new ResourceBundle() {
+            @Override
+            protected Object handleGetObject(String key) {
+                if ("map.group.europe".equals(key)) {
+                    return null;
+                }
+                return RESOURCES.containsKey(key) ? RESOURCES.getObject(key) : null;
+            }
+
+            @Override
+            public Enumeration<String> getKeys() {
+                return java.util.Collections.enumeration(
+                        RESOURCES.keySet().stream()
+                                .filter(key -> !"map.group.europe".equals(key))
+                                .toList()
+                );
+            }
+        };
+    }
+
+    private static MouseEvent mouseEvent(
+            javafx.event.EventType<MouseEvent> type,
+            MouseButton button,
+            int clickCount
+    ) {
+        return new MouseEvent(
+                type,
+                0, 0, 0, 0,
+                button,
+                clickCount,
+                false, false, false, false,
+                button == MouseButton.PRIMARY,
+                false, false, false, false, true,
+                null
+        );
     }
 
     private static <T> T control(Parent root, String selector, Class<T> type) {

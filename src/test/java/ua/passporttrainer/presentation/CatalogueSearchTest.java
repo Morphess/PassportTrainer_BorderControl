@@ -43,7 +43,8 @@ class CatalogueSearchTest {
                 "Україна",
                 "Ukraine source directory",
                 EntityType.COUNTRY,
-                ReviewStatus.AUTO_CLASSIFIED
+                ReviewStatus.AUTO_CLASSIFIED,
+                1
         );
 
         assertEquals(List.of(), CatalogueSearch.filterAndSort(List.of(country), "source directory"));
@@ -58,7 +59,8 @@ class CatalogueSearchTest {
                 displayName,
                 displayName,
                 EntityType.COUNTRY,
-                ReviewStatus.AUTO_CLASSIFIED
+                ReviewStatus.AUTO_CLASSIFIED,
+                0
         );
     }
 }

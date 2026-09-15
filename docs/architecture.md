@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Stage 5 реалізував read-only manifest pipeline, Stage 6 — versioned SQLite catalogue pipeline та repository implementations, а Stage 7 — browse-only catalogue UI поверх цих меж. Інтерактивна карта, quiz generation, режими гри та writable persistence належать наступним етапам.
+Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Stage 5 реалізував read-only manifest pipeline, Stage 6 — versioned SQLite catalogue pipeline та repository implementations, Stage 7 — browse-only catalogue UI, а Stage 8 — інтерактивну карту поверх тих самих canonical IDs і navigation boundaries. Quiz generation, режими гри та writable persistence належать наступним етапам.
 
 ## Шари та дозволені залежності
 
@@ -47,7 +47,7 @@ Model ──► only Java/JDK types (never JavaFX)
 
 ### `PassportTrainerApplication`
 
-JavaFX composition root. Він визначає runtime locations, відкриває й перевіряє read-only `CatalogueApplicationContext`, створює `PassportImageLocator`, explicit controller factory та `NavigationService`, задає параметри головного `Stage` і відкриває START. Якщо catalogue не відкривається або не проходить integrity validation, START залишається працездатним і показує локалізовану помилку. Composition root не містить бізнес-правил.
+JavaFX composition root. Він визначає runtime locations, відкриває й перевіряє read-only `CatalogueApplicationContext`, створює `PassportImageLocator`, explicit controller factory та `NavigationService`, задає параметри головного `Stage` і відкриває START. Factory окремо завантажує та перевіряє map resources; помилка карти вимикає лише map action, а catalogue fallback залишається доступним. Якщо catalogue не відкривається або не проходить integrity validation, START залишається працездатним і показує локалізовану помилку. Composition root не містить бізнес-правил.
 
 ### `NavigationService`
 
@@ -68,12 +68,21 @@ JavaFX composition root. Він визначає runtime locations, відкри
 
 Кожен FXML-екран має власний вузький controller:
 
-- `StartController` показує availability catalogue і відкриває catalogue flow;
+- `StartController` показує незалежну availability catalogue/map і відкриває відповідний browse flow;
 - `CatalogueController` відображає canonical continents/entities, membership counts, review/type labels і Unicode-normalized search;
+- `WorldMapController` адаптує validated map definition і `WorldMapCatalogue` до native JavaFX map, continent shortcuts, fallback list та наявного переходу до паспортів;
 - `PassportListController` відображає всі документи одного entity;
 - `PassportDetailsController` показує metadata, image loading/error state та керування послідовністю зображень.
 
-`CatalogueControllerFactory` явно створює лише підтримувані controller types і передає `NavigationService`, сервіси, image locator та `ResourceBundle` через constructors. DI framework, service locator, controller SQL/TSV/filesystem scanning і загальний `MainController` не використовуються.
+`CatalogueControllerFactory` явно створює лише підтримувані controller types і передає `NavigationService`, сервіси, image locator, validated map definition та `ResourceBundle` через constructors. DI framework, service locator, controller SQL/TSV/filesystem scanning і загальний `MainController` не використовуються.
+
+### Межа інтерактивної карти
+
+`tools/map/generate-world-map.sh` відтворює checked-in `world-map.svg` із pinned Natural Earth 5.1.1 Ukraine-POV dataset через `mapshaper@0.7.61`, Robinson projection і topology-preserving 15% simplification. Source/output SHA-256, 249 unique `ADM0_A3` IDs, provenance та public-domain notice зафіксовані в `src/main/resources/map/`.
+
+Map metadata використовує окремий stable `mapRegionId` namespace і explicit `mapRegionId -> canonical entityId` links. Runtime не виконує fuzzy/name/ISO matching. `WorldMapResourceLoader` блокує DTD/external entities, перевіряє asset hash і вимагає точної рівності SVG/TSV region sets. `WorldMapValidator` вимагає 249 regions = 135 linked + 114 intentionally unlinked та повне покриття 139 canonical entities через 135 links + 4 explicit list-only exclusions.
+
+Шість presentation groups не змінюють сім canonical continent records; `AUSTRALIA_OCEANIA` об'єднує `continent:australia` і `continent:oceania` лише у presentation model. `WorldMapCatalogue` будує deduplicated fallback lists через `CountryService`. `MapViewportState` і `MapInteractionState` є pure JDK state models; `WorldMapPane` є native JavaFX renderer/input surface. Map controller не читає SVG/TSV, не зіставляє names і не виконує catalogue rules.
 
 ## Domain model
 
@@ -82,7 +91,7 @@ JavaFX composition root. Він визначає runtime locations, відкри
 | Модель | Призначення |
 |---|---|
 | `Continent` | Канонічний континент, його source name і порядок відображення. |
-| `Country` | Країна або інша сутність-емітент із primary continent, `EntityType` і `ReviewStatus`. |
+| `Country` | Країна або інша сутність-емітент із primary continent, `EntityType`, `ReviewStatus` та aggregate document count. |
 | `PassportDocument` | Логічний документ або окремий його варіант із `DocumentType`, `ReviewStatus` та image count. |
 | `PassportImage` | Шлях, формат, розмір і SHA-256 конкретного зображення. |
 | `DocumentType` | Канонічний тип документа. |
@@ -185,26 +194,26 @@ Controller не будує filesystem paths і не сканує source collecti
 Приклад відкриття паспортів entity:
 
 ```text
-Catalogue View
-    │ selected continentId / entityId
-    ▼
-CatalogueController
-    │
-    ├──► ContinentService ──► ContinentRepository
-    └──► CountryService   ──► CountryRepository
-                                  │
-                                  ▼
-                             SQLite catalogue
-
-Passport List View
-    │ selected documentId
-    ▼
-PassportListController ──► PassportService ──► PassportRepository
-    │
-    └──► NavigationService ──► PassportDetailsController
-                                      │
-                                      ├──► PassportService
-                                      └──► PassportImageLocator ──► read-only image URI
+Catalogue View ── selected continentId/entityId ──► CatalogueController
+       │                                                   │
+       │                                                   ├──► ContinentService
+       │                                                   └──► CountryService
+       │
+World Map View ── explicit mapRegionId/entityId ──► WorldMapController
+       │                                                   │
+       │                                                   └──► WorldMapCatalogue
+       │                                                           │
+       │                                                           └──► CountryService
+       ▼
+NavigationService ──► Passport List View
+                           │ selected documentId
+                           ▼
+                    PassportListController ──► PassportService ──► PassportRepository
+                           │
+                           └──► NavigationService ──► PassportDetailsController
+                                                              │
+                                                              ├──► PassportService
+                                                              └──► PassportImageLocator
 ```
 
 Після отримання даних controllers лише перетворюють результат на view state. Вони не кешують глобальний стан програми, не застосовують quiz eligibility і не беруть на себе відповідальність інших screens.
@@ -217,16 +226,18 @@ Runtime composition:
 2. `CatalogueApplicationContext.openReadOnly` створює read-only `SQLiteConnectionProvider` і перевіряє migration version та catalogue integrity;
 3. context створює три SQLite repositories та відповідні services;
 4. `PassportTrainerApplication` створює `PassportImageLocator` і `CatalogueControllerFactory`;
-5. `NavigationService` передає factory кожному `FXMLLoader`;
-6. factory constructor-injects лише залежності конкретного controller.
+5. factory окремо завантажує map resources, перевіряє hash/mappings/catalogue coverage і зберігає незалежний map availability state;
+6. `NavigationService` передає factory кожному `FXMLLoader`;
+7. factory constructor-injects лише залежності конкретного controller.
 
-Failure to open or validate catalogue creates an unavailable factory: START remains loadable, показує одну локалізовану помилку й disables catalogue action. Service locator і global mutable singleton-об'єкти відсутні.
+Failure to open or validate catalogue creates an unavailable factory: START remains loadable and disables both catalogue/map actions. Failure to load or validate only map resources disables map action but preserves the Stage 7 catalogue fallback. Service locator і global mutable singleton-об'єкти відсутні.
 
 ## Тестові межі
 
 - model, service і pure presentation тести не запускають JavaFX toolkit;
 - repository integration-тести використовують лише temporary SQLite DB;
-- catalogue UI smoke-тести завантажують real FXML через production navigation/controller factory, перевіряють user-observable state, real image decode, multi-image controls і back navigation на graphical JavaFX toolkit;
+- map loader/validator тести перевіряють XML hardening, asset integrity, exact region/entity coverage, explicit list-only records і high-risk mappings;
+- catalogue UI smoke-тести завантажують real FXML через production navigation/controller factory, перевіряють map/list selection, keyboard activation, Unicode search, existing passport flow, real image decode, multi-image controls і back navigation на graphical JavaFX toolkit;
 - UI тести не порівнюють pixel-perfect screenshots;
 - `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model;
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
@@ -234,7 +245,6 @@ Failure to open or validate catalogue creates an unavailable factory: START rema
 
 ## Що навмисно не реалізовано
 
-- інтерактивна карта;
 - генератори навчальних та екзаменаційних запитань;
 - конкретний password hashing algorithm;
 - learning, training та examination screens;

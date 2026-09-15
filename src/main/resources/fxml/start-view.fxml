@@ -12,7 +12,10 @@
     <children>
         <Label fx:id="titleLabel" styleClass="title-label" text="%app.title" />
         <Label fx:id="statusLabel" styleClass="status-label" text="%app.initializationMessage" />
-        <Button fx:id="catalogueButton" defaultButton="true" onAction="#openCatalogue"
-                styleClass="primary-button" text="%start.openCatalogue" />
+        <Label fx:id="mapStatusLabel" styleClass="status-label" text="%app.initializationMessage" />
+        <Button fx:id="mapButton" defaultButton="true" onAction="#openWorldMap"
+                styleClass="primary-button" text="%start.openWorldMap" />
+        <Button fx:id="catalogueButton" onAction="#openCatalogue"
+                text="%start.openCatalogue" />
     </children>
 </VBox>
