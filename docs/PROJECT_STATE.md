@@ -22,9 +22,9 @@ This document records the repository state after Stage 8. It distinguishes imple
 - JavaFX development launch through `exec-maven-plugin` and the existing `Launcher`.
 - JavaFX catalogue flow from START through continent/entity selection, document selection, and passport-image details, with back navigation between every screen.
 - JavaFX interactive-map flow from START through map or fallback entity selection into the existing document and passport-image screens, with the same instance-local back navigation.
-- A reproducibly generated Natural Earth 5.1.1 Ukraine-POV Robinson SVG with 249 unique `ADM0_A3` region IDs, pinned source/output hashes, retained public-domain notice, and an offline `mapshaper@0.7.61` generation tool.
+- A reproducibly generated Natural Earth 5.1.1 Ukraine-POV Robinson SVG with 249 unique `ADM0_A3` region IDs, pinned source/output hashes, retained public-domain notice, and a pinned `mapshaper@0.7.61` generation tool that validates staged output before atomic replacement.
 - Strict map resource loading and validation covering 249 geometry records, 135 explicit canonical links, 114 intentionally unlinked geographic regions, and 4 list-only entities so that all 139 canonical entities remain reachable without runtime name matching.
-- Native JavaFX map interaction with six presentation groups over the seven canonical continents, continent focus, hover/review/no-data/selection states, bounded zoom and pan, reset, keyboard activation, Unicode fallback search, and localized tooltips.
+- Native JavaFX map interaction with six presentation groups over the seven canonical continents, dateline-aware Australia/Oceania focus, hover/review/no-data/selection states, bounded zoom and pan, reset, keyboard activation, Unicode fallback search, and localized accessible labels and tooltips.
 - Central FXML loading, constructor-injected controller creation, scene-root replacement, shared CSS, and instance-local navigation history through `NavigationService`.
 - JDK-only domain records and enums for countries, passports, users, quiz sessions, answers, and results; catalogue identities use the stable Stage 5 text IDs, while `EntityType` and `ReviewStatus` expose persisted catalogue classification honestly to the UI.
 - The authoritative `DocumentType` contract is `ORDINARY_PASSPORT`, `DIPLOMATIC_PASSPORT`, `SERVICE_PASSPORT`, `NATIONAL_ID`, and `UNKNOWN`.
@@ -32,7 +32,7 @@ This document records the repository state after Stage 8. It distinguishes imple
 - Service-layer classes using constructor injection, including catalogue browsing by canonical continent membership.
 - `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
 - In-memory quiz-session lifecycle with validated questions, unique question IDs and answer options, one answer per question, immutable completion, bounded scores, and examination-only result-save delegation.
-- Ninety-one JUnit tests, including isolated SQLite integration, Unicode search, map integrity/completeness, high-risk geopolitical mappings, viewport and interaction boundaries, independent map-failure fallback, FXML loading, complete map/catalogue navigation, portable image resolution, real image decoding, and multi-image paging.
+- Ninety-five JUnit tests, including isolated SQLite integration, Unicode search, map integrity/completeness, high-risk geopolitical mappings, dateline-wrapped viewport and interaction behavior, independent map-failure fallback, FXML loading, complete map/catalogue navigation, portable image resolution, real image decoding, and multi-image paging.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
@@ -148,12 +148,13 @@ Stage 7 verification established that:
 
 Stage 8 verification established that:
 
-- the checked-in Natural Earth asset reproduces from the pinned Ukraine-POV source and `mapshaper@0.7.61` to the expected SHA-256;
+- the checked-in Natural Earth asset reproduces from the pinned Ukraine-POV source and `mapshaper@0.7.61` to the expected SHA-256; generation validates staged output before atomic replacement, and a controlled failure leaves an existing destination unchanged;
 - strict XML security, asset integrity, SVG/metadata identity equality, exact canonical coverage, list-only exclusions, and high-risk mappings fail closed;
-- the native JavaFX surface builds 249 paths, supports bounded viewport and interaction state, and retains list access for unlinked or geometry-less catalogue entities;
-- START → world map → map/list entity selection → existing passport documents → back navigation is exercised on a graphical JavaFX toolkit, including keyboard activation and Unicode-normalized search;
+- the native JavaFX surface builds 249 canonical paths, supports bounded viewport and interaction state, and retains list access for unlinked or geometry-less catalogue entities;
+- Australia/Oceania focus presents the map cyclically across the dateline so Australia, New Zealand, Tonga, Samoa, and representative Pacific islands remain visible through resize, zoom, pan, selection synchronization, document navigation, back navigation, and reset;
+- START → world map → map/list entity selection → existing passport documents → back navigation is exercised on a graphical JavaFX toolkit, including keyboard activation, Unicode-normalized search, and accessible review-status labeling;
 - the early performance gate measured 109 ms resource loading, 271 ms path construction, 44 ms first layout, and a 12 MiB heap delta on the development workstation;
-- all 91 tests pass, `./mvnw package` succeeds, and the standard development command reaches a live JavaFX process.
+- all 95 tests pass, `./mvnw package` succeeds, and the standard development command reaches a live JavaFX process.
 
 ### Known technical debt
 

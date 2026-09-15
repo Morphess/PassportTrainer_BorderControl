@@ -1,8 +1,31 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+REQUIRED_COMMANDS=(cat curl cut grep mkdir mktemp mv npx rm sha256sum sort tr wc)
+for command in "${REQUIRED_COMMANDS[@]}"; do
+    command -v "${command}" >/dev/null 2>&1 || {
+        printf 'Required command is unavailable: %s\n' "${command}" >&2
+        exit 1
+    }
+done
+
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+SCRIPT_DIR="${SCRIPT_PATH%/*}"
+if [[ "${SCRIPT_DIR}" == "${SCRIPT_PATH}" ]]; then
+    SCRIPT_DIR="."
+fi
+ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 OUTPUT_PATH="${1:-${ROOT_DIR}/src/main/resources/map/world-map.svg}"
+OUTPUT_NAME="${OUTPUT_PATH##*/}"
+OUTPUT_DIR="${OUTPUT_PATH%/*}"
+if [[ -z "${OUTPUT_NAME}" ]]; then
+    printf 'Output path must name an SVG file\n' >&2
+    exit 1
+fi
+if [[ "${OUTPUT_DIR}" == "${OUTPUT_PATH}" ]]; then
+    OUTPUT_DIR="."
+fi
+
 MAPSHAPER_VERSION="0.7.61"
 SOURCE_TAG="v5.1.2"
 SOURCE_VERSION="5.1.1"
@@ -11,17 +34,18 @@ SOURCE_BASE="https://raw.githubusercontent.com/nvkelso/natural-earth-vector/${SO
 EXPECTED_REGION_COUNT="249"
 EXPECTED_OUTPUT_SHA256="5d329b83c0f51b0996519f0fd62073aaf296a3f8013bdcdd73ec2efa80a79ee8"
 
-for command in curl npx sha256sum grep sort wc cut tr; do
-    command -v "${command}" >/dev/null 2>&1 || {
-        printf 'Required command is unavailable: %s\n' "${command}" >&2
-        exit 1
-    }
-done
-
+mkdir -p "${OUTPUT_DIR}"
+OUTPUT_DIR="$(cd "${OUTPUT_DIR}" && pwd)"
+OUTPUT_PATH="${OUTPUT_DIR}/${OUTPUT_NAME}"
 WORK_DIR="$(mktemp -d)"
-trap 'rm -rf "${WORK_DIR}"' EXIT
+OUTPUT_WORK_DIR="$(mktemp -d "${OUTPUT_DIR}/.${OUTPUT_NAME}.tmp.XXXXXX")"
+cleanup() {
+    rm -rf -- "${WORK_DIR}" "${OUTPUT_WORK_DIR}"
+}
+trap cleanup EXIT
 SOURCE_DIR="${WORK_DIR}/source"
-mkdir -p "${SOURCE_DIR}" "$(dirname "${OUTPUT_PATH}")"
+GENERATED_OUTPUT="${OUTPUT_WORK_DIR}/${OUTPUT_NAME}"
+mkdir -p "${SOURCE_DIR}"
 
 for extension in shp shx dbf prj VERSION.txt; do
     curl --fail --location --silent --show-error \
@@ -53,23 +77,39 @@ npx --yes "mapshaper@${MAPSHAPER_VERSION}" \
     -simplify weighted 15% keep-shapes \
     -proj robin \
     -each 'svg_id="region-"+ADM0_A3' \
-    -o format=svg id-field=svg_id width=10000 "${OUTPUT_PATH}"
+    -o format=svg id-field=svg_id width=10000 "${GENERATED_OUTPUT}"
 
-region_count="$(grep -o 'id="region-[^"]*"' "${OUTPUT_PATH}" | wc -l)"
-unique_region_count="$(grep -o 'id="region-[^"]*"' "${OUTPUT_PATH}" | sort -u | wc -l)"
-if [[ "${region_count}" != "${EXPECTED_REGION_COUNT}" || \
-      "${unique_region_count}" != "${EXPECTED_REGION_COUNT}" ]]; then
-    printf 'Expected %s unique SVG regions, found %s paths and %s unique IDs\n' \
-        "${EXPECTED_REGION_COUNT}" "${region_count}" "${unique_region_count}" >&2
+path_count="$({ grep -oE '<path[[:space:]]' "${GENERATED_OUTPUT}" || true; } | wc -l | tr -d '[:space:]')"
+region_count="$({ grep -oE 'id="region-[^"]*"' "${GENERATED_OUTPUT}" || true; } | wc -l | tr -d '[:space:]')"
+valid_region_count="$({
+    grep -oE 'id="region-[^"]*"' "${GENERATED_OUTPUT}" \
+        | grep -xE 'id="region-[A-Z0-9]{3}"' \
+        || true
+} | wc -l | tr -d '[:space:]')"
+unique_region_count="$({
+    grep -oE 'id="region-[^"]*"' "${GENERATED_OUTPUT}" || true
+} | sort -u | wc -l | tr -d '[:space:]')"
+if [[ "${path_count}" != "${EXPECTED_REGION_COUNT}" \
+      || "${region_count}" != "${EXPECTED_REGION_COUNT}" \
+      || "${valid_region_count}" != "${EXPECTED_REGION_COUNT}" \
+      || "${unique_region_count}" != "${EXPECTED_REGION_COUNT}" ]]; then
+    printf 'Expected %s valid unique SVG regions, found %s paths, %s region IDs, %s valid IDs, and %s unique IDs\n' \
+        "${EXPECTED_REGION_COUNT}" \
+        "${path_count}" \
+        "${region_count}" \
+        "${valid_region_count}" \
+        "${unique_region_count}" >&2
     exit 1
 fi
 
-actual_output_sha256="$(sha256sum "${OUTPUT_PATH}" | cut -d ' ' -f 1)"
+actual_output_sha256="$(sha256sum "${GENERATED_OUTPUT}" | cut -d ' ' -f 1)"
 if [[ "${actual_output_sha256}" != "${EXPECTED_OUTPUT_SHA256}" ]]; then
     printf 'Unexpected world-map.svg SHA-256: %s (expected %s)\n' \
         "${actual_output_sha256}" "${EXPECTED_OUTPUT_SHA256}" >&2
     exit 1
 fi
+
+mv -- "${GENERATED_OUTPUT}" "${OUTPUT_PATH}"
 
 printf 'Generated %s\n' "${OUTPUT_PATH}"
 printf 'Natural Earth: %s %s, Ukraine POV\n' "${SOURCE_STEM}" "${SOURCE_VERSION}"

@@ -46,7 +46,8 @@
                 </VBox>
                 <VBox prefWidth="320.0" spacing="10.0" styleClass="content-panel map-list-panel">
                     <Label styleClass="section-title" text="%map.entities" />
-                    <TextField fx:id="searchField" promptText="%map.searchPrompt" />
+                    <TextField fx:id="searchField" accessibleText="%map.searchPrompt"
+                               promptText="%map.searchPrompt" />
                     <ListView fx:id="entityList" VBox.vgrow="ALWAYS" />
                 </VBox>
             </items>

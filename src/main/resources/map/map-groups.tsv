@@ -4,4 +4,4 @@ ASIA	map.group.asia	continent:asia	false	5644.11	730.12	3283.82	2089.49
 AFRICA	map.group.africa	continent:africa	false	4281.56	1289.82	2447.41	2668.59
 NORTH_AMERICA	map.group.northAmerica	continent:north-america	false	1791.69	1.00	2997.14	2243.82
 SOUTH_AMERICA	map.group.southAmerica	continent:south-america	false	2016.04	2078.32	2370.47	2228.52
-AUSTRALIA_OCEANIA	map.group.australiaOceania	continent:australia|continent:oceania	true	6268.15	1897.33	3714.90	2297.80
+AUSTRALIA_OCEANIA	map.group.australiaOceania	continent:australia|continent:oceania	true	6268.15	1897.33	5214.44	2297.80

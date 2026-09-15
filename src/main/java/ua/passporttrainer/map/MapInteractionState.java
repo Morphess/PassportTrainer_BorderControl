@@ -57,9 +57,6 @@ public final class MapInteractionState {
         );
     }
 
-    public RegionData regionData(String regionId) {
-        return requireKnown(regionId);
-    }
 
     private String requireKnownOrNull(String regionId) {
         if (regionId == null) {

@@ -1,6 +1,8 @@
 package ua.passporttrainer.ui;
 
 import javafx.css.PseudoClass;
+import javafx.geometry.Bounds;
+import javafx.geometry.Point2D;
 import javafx.application.Platform;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
@@ -44,6 +46,8 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -60,6 +64,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class CatalogueUiSmokeTest {
 
     private static final ResourceBundle RESOURCES = ResourceBundle.getBundle("i18n.messages");
+    private static final Pattern SVG_NUMBER = Pattern.compile(
+            "-?(?:\\d+(?:\\.\\d*)?|\\.\\d+)(?:[eE][+-]?\\d+)?"
+    );
 
     @TempDir
     Path temporaryDirectory;
@@ -392,31 +399,36 @@ class CatalogueUiSmokeTest {
                 mapRoot.layout();
                 StackPane mapHost = control(mapRoot, "#mapHost", StackPane.class);
                 WorldMapPane mapPane = (WorldMapPane) mapHost.getChildren().getFirst();
+                SVGPath ukraine = control(mapRoot, "#region-UKR", SVGPath.class);
+                Bounds initialUkraineBounds = sceneBounds(ukraine);
                 ListView<?> entities = control(mapRoot, "#entityList", ListView.class);
                 TextField search = control(mapRoot, "#searchField", TextField.class);
-                assertEquals(249, mapPane.regionCount());
+                assertEquals(249, mapRoot.lookupAll(".map-region").size());
                 assertEquals(139, entities.getItems().size());
                 assertEquals(6, control(mapRoot, "#groupButtons", FlowPane.class).getChildren().size());
                 assertTrue(mapPane.isFocusTraversable());
+                assertEquals(RESOURCES.getString("map.searchPrompt"), search.getAccessibleText());
+                assertTrue(ukraine.getAccessibleText().contains(
+                        RESOURCES.getString("reviewStatus.AUTO_CLASSIFIED")
+                ));
 
                 ToggleButton asia = control(mapRoot, "#mapGroup-ASIA", ToggleButton.class);
                 asia.fire();
-                assertEquals("ASIA", mapPane.activeGroupId());
+                assertTrue(asia.isSelected());
                 assertTrue(entities.getItems().stream()
                         .map(Country.class::cast)
                         .anyMatch(country -> country.displayName().equals("Корея (неуточнено)")));
 
                 control(mapRoot, "#resetMapButton", Button.class).fire();
-                assertEquals(1.0, mapPane.viewportState().zoom());
+                assertEquals(initialUkraineBounds.getWidth(), sceneBounds(ukraine).getWidth(), 0.001);
                 search.setText(Normalizer.normalize("уКрАїНа", Normalizer.Form.NFD));
                 assertEquals(1, entities.getItems().size());
                 assertEquals("Україна", ((Country) entities.getItems().getFirst()).displayName());
                 search.clear();
 
-                SVGPath ukraine = mapPane.regionNode("UKR");
-                ukraine.getOnMouseEntered().handle(mouseEvent(MouseEvent.MOUSE_ENTERED, MouseButton.NONE, 0));
+                ukraine.fireEvent(mouseEvent(MouseEvent.MOUSE_ENTERED, MouseButton.NONE, 0));
                 assertTrue(ukraine.getPseudoClassStates().contains(PseudoClass.getPseudoClass("hovered")));
-                ukraine.getOnMouseClicked().handle(mouseEvent(MouseEvent.MOUSE_CLICKED, MouseButton.PRIMARY, 1));
+                ukraine.fireEvent(mouseEvent(MouseEvent.MOUSE_CLICKED, MouseButton.PRIMARY, 1));
                 assertEquals(
                         "Україна",
                         ((Country) entities.getSelectionModel().getSelectedItem()).displayName()
@@ -424,20 +436,20 @@ class CatalogueUiSmokeTest {
                 assertTrue(ukraine.getPseudoClassStates().contains(PseudoClass.getPseudoClass("selected")));
                 assertEquals(javafx.scene.AccessibleRole.BUTTON, ukraine.getAccessibleRole());
 
-                double zoomBefore = mapPane.viewportState().zoom();
+                double widthBeforeZoom = sceneBounds(ukraine).getWidth();
                 control(mapRoot, "#zoomInButton", Button.class).fire();
-                assertTrue(mapPane.viewportState().zoom() > zoomBefore);
+                assertTrue(sceneBounds(ukraine).getWidth() > widthBeforeZoom);
 
-                SVGPath cyprus = mapPane.regionNode("CYP");
-                cyprus.getOnKeyPressed().handle(new KeyEvent(
+                SVGPath cyprus = control(mapRoot, "#region-CYP", SVGPath.class);
+                cyprus.fireEvent(new KeyEvent(
                         KeyEvent.KEY_PRESSED, "", "", KeyCode.ENTER, false, false, false, false
                 ));
                 assertEquals(
                         "Кіпр",
                         ((Country) entities.getSelectionModel().getSelectedItem()).displayName()
                 );
-                SVGPath aruba = mapPane.regionNode("ABW");
-                aruba.getOnMouseClicked().handle(mouseEvent(MouseEvent.MOUSE_CLICKED, MouseButton.PRIMARY, 1));
+                SVGPath aruba = control(mapRoot, "#region-ABW", SVGPath.class);
+                aruba.fireEvent(mouseEvent(MouseEvent.MOUSE_CLICKED, MouseButton.PRIMARY, 1));
                 assertEquals(
                         "Кіпр",
                         ((Country) entities.getSelectionModel().getSelectedItem()).displayName()
@@ -453,6 +465,126 @@ class CatalogueUiSmokeTest {
                 assertFalse(control(passportsRoot, "#documentList", ListView.class).getItems().isEmpty());
                 navigation.goBack();
                 assertSame(mapRoot, stage.getScene().getRoot());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void keepsDatelineGroupVisibleInteractiveAndNavigableAcrossTheFullFlow() throws Exception {
+        Path database = temporaryDirectory.resolve("wrapped-map-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                        context,
+                        new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        RESOURCES
+                );
+                NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+                navigation.show(View.START);
+                stage.show();
+
+                Parent startRoot = stage.getScene().getRoot();
+                control(startRoot, "#mapButton", Button.class).fire();
+                Parent mapRoot = stage.getScene().getRoot();
+                mapRoot.applyCss();
+                mapRoot.layout();
+                WorldMapPane mapPane = (WorldMapPane) control(
+                        mapRoot, "#mapHost", StackPane.class
+                ).getChildren().getFirst();
+                ListView<?> entities = control(mapRoot, "#entityList", ListView.class);
+                ToggleButton oceania = control(
+                        mapRoot, "#mapGroup-AUSTRALIA_OCEANIA", ToggleButton.class
+                );
+
+                oceania.fire();
+                mapRoot.applyCss();
+                mapRoot.layout();
+
+                Bounds viewport = mapPane.localToScene(mapPane.getLayoutBounds());
+                assertContained(viewport, sceneBounds(control(
+                        mapRoot, "#region-AUS", SVGPath.class
+                )), "Australia");
+                assertContained(viewport, sceneBounds(control(
+                        mapRoot, "#wrapped-region-TON", SVGPath.class
+                )), "Tonga");
+                assertContained(viewport, sceneBounds(control(
+                        mapRoot, "#wrapped-region-WSM", SVGPath.class
+                )), "Samoa");
+                assertVisibleGeometry(mapRoot, "#region-NZL", viewport, "New Zealand main geometry");
+                assertVisibleGeometry(
+                        mapRoot, "#wrapped-region-NZL", viewport, "New Zealand seam geometry"
+                );
+                assertVisibleGeometry(mapRoot, "#region-FSM", viewport, "Micronesia");
+                assertVisibleGeometry(mapRoot, "#region-TUV", viewport, "Tuvalu");
+                assertVisibleGeometry(mapRoot, "#region-PNG", viewport, "Papua New Guinea");
+
+                mapPane.resize(640, 420);
+                mapPane.layout();
+                Bounds resizedViewport = mapPane.localToScene(mapPane.getLayoutBounds());
+                SVGPath wrappedTonga = control(mapRoot, "#wrapped-region-TON", SVGPath.class);
+                SVGPath wrappedSamoa = control(mapRoot, "#wrapped-region-WSM", SVGPath.class);
+                assertContained(resizedViewport, sceneBounds(wrappedTonga), "Tonga after resize");
+                assertContained(resizedViewport, sceneBounds(wrappedSamoa), "Samoa after resize");
+                assertVisibleGeometry(
+                        mapRoot, "#region-NZL", resizedViewport, "New Zealand after resize"
+                );
+
+                double tongaWidthBeforeZoom = sceneBounds(wrappedTonga).getWidth();
+                control(mapRoot, "#zoomInButton", Button.class).fire();
+                assertTrue(sceneBounds(wrappedTonga).getWidth() > tongaWidthBeforeZoom);
+                double tongaXBeforePan = sceneBounds(wrappedTonga).getMinX();
+                mapPane.fireEvent(new KeyEvent(
+                        KeyEvent.KEY_PRESSED, "", "", KeyCode.RIGHT, false, false, false, false
+                ));
+                assertNotEquals(tongaXBeforePan, sceneBounds(wrappedTonga).getMinX());
+                assertTrue(resizedViewport.intersects(sceneBounds(wrappedTonga)));
+
+                wrappedSamoa.fireEvent(mouseEvent(
+                        MouseEvent.MOUSE_CLICKED, MouseButton.PRIMARY, 1
+                ));
+                assertEquals(
+                        "Самоа",
+                        ((Country) entities.getSelectionModel().getSelectedItem()).displayName()
+                );
+                Country tonga = entities.getItems().stream()
+                        .map(Country.class::cast)
+                        .filter(country -> country.displayName().equals("Тонга"))
+                        .findFirst()
+                        .orElseThrow();
+                entities.getSelectionModel().select(entities.getItems().indexOf(tonga));
+                assertTrue(wrappedTonga.getPseudoClassStates().contains(
+                        PseudoClass.getPseudoClass("selected")
+                ));
+
+                control(mapRoot, "#openButton", Button.class).fire();
+                Parent passportsRoot = stage.getScene().getRoot();
+                ListView<?> documents = control(passportsRoot, "#documentList", ListView.class);
+                assertFalse(documents.getItems().isEmpty());
+                documents.getSelectionModel().selectFirst();
+                control(passportsRoot, "#openButton", Button.class).fire();
+                Parent detailsRoot = stage.getScene().getRoot();
+                assertNotNull(control(detailsRoot, "#passportImageView", ImageView.class));
+
+                navigation.goBack();
+                assertSame(passportsRoot, stage.getScene().getRoot());
+                navigation.goBack();
+                assertSame(mapRoot, stage.getScene().getRoot());
+                assertTrue(oceania.isSelected());
+                assertNotNull(mapRoot.lookup("#wrapped-region-TON"));
+
+                control(mapRoot, "#resetMapButton", Button.class).fire();
+                assertFalse(oceania.isSelected());
+                assertNull(mapRoot.lookup("#wrapped-region-TON"));
+                assertEquals(249, mapRoot.lookupAll(".map-region").size());
+                navigation.goBack();
+                assertSame(startRoot, stage.getScene().getRoot());
+                assertFalse(navigation.canGoBack());
             } finally {
                 stage.close();
             }
@@ -544,6 +676,44 @@ class CatalogueUiSmokeTest {
                 );
             }
         };
+    }
+
+    private static Bounds sceneBounds(SVGPath path) {
+        return path.localToScene(path.getBoundsInLocal());
+    }
+
+    private static void assertContained(Bounds viewport, Bounds content, String description) {
+        assertTrue(
+                viewport.getMinX() <= content.getMinX()
+                        && viewport.getMinY() <= content.getMinY()
+                        && viewport.getMaxX() >= content.getMaxX()
+                        && viewport.getMaxY() >= content.getMaxY(),
+                description + " is outside the focused viewport"
+        );
+    }
+
+    private static void assertVisibleGeometry(
+            Parent root,
+            String selector,
+            Bounds viewport,
+            String description
+    ) {
+        SVGPath path = control(root, selector, SVGPath.class);
+        Matcher matcher = SVG_NUMBER.matcher(path.getContent());
+        boolean visible = false;
+        while (matcher.find()) {
+            double x = Double.parseDouble(matcher.group());
+            if (!matcher.find()) {
+                break;
+            }
+            double y = Double.parseDouble(matcher.group());
+            Point2D point = path.localToScene(x, y);
+            if (viewport.contains(point)) {
+                visible = true;
+                break;
+            }
+        }
+        assertTrue(visible, description + " has no visible geometry in the focused viewport");
     }
 
     private static MouseEvent mouseEvent(

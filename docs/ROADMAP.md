@@ -50,7 +50,7 @@ The roadmap preserves the established architecture and product scope. Details re
 
 - **Goal:** support continent and country selection through an interactive map without replacing catalogue navigation.
 - **Primary result:** START → interactive world map or fallback list → existing document list → image details, using the same canonical entity IDs and navigation stack as Stage 7.
-- **Delivered:** reproducibly generated Natural Earth 5.1.1 Ukraine-POV Robinson SVG; 249 stable `ADM0_A3` regions; explicit versioned mappings for 135 linked and 114 intentionally unlinked regions; explicit list-only coverage for the remaining 4 of 139 canonical entities; strict SVG/TSV integrity validation; six presentation groups over seven canonical continents; native JavaFX hover, selection, bounded zoom/pan/reset, continent focus, keyboard access, Unicode fallback search, document counts, and graceful map-unavailable fallback to the Stage 7 catalogue.
+- **Delivered:** reproducibly generated Natural Earth 5.1.1 Ukraine-POV Robinson SVG with validated atomic replacement; 249 stable `ADM0_A3` regions; explicit versioned mappings for 135 linked and 114 intentionally unlinked regions; explicit list-only coverage for the remaining 4 of 139 canonical entities; strict SVG/TSV integrity validation; six presentation groups over seven canonical continents, including cyclic dateline focus for Australia/Oceania; native JavaFX hover, selection, bounded zoom/pan/reset, keyboard access, Unicode fallback search, accessible review-status labels, document counts, and graceful map-unavailable fallback to the Stage 7 catalogue.
 - **Dependencies:** completed Stage 7 catalogue navigation and the approved Stage 8 map asset and interaction design.
 
 ## 7. Quiz generation engine

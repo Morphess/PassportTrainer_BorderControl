@@ -1,6 +1,8 @@
 package ua.passporttrainer.map;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -36,8 +38,8 @@ public final class WorldMapPane extends Pane {
     private final Group mapGroup = new Group();
     private final Rectangle viewportClip = new Rectangle();
     private final Affine viewportTransform = new Affine();
-    private final Map<String, SVGPath> regionNodes = new LinkedHashMap<>();
-    private final Map<String, Tooltip> regionTooltips = new LinkedHashMap<>();
+    private final Map<String, List<RegionView>> regionViews = new LinkedHashMap<>();
+    private final List<RegionView> wrappedRegionViews = new ArrayList<>();
     private Consumer<MapRegion> regionActivated = ignored -> { };
     private Function<MapRegion, String> regionLabelProvider = MapRegion::id;
     private String activeGroupId;
@@ -69,11 +71,12 @@ public final class WorldMapPane extends Pane {
 
     public void setRegionLabelProvider(Function<MapRegion, String> provider) {
         regionLabelProvider = Objects.requireNonNull(provider, "provider");
-        for (MapRegion region : definition.regions().values()) {
-            String label = regionLabelProvider.apply(region);
-            SVGPath node = regionNodes.get(region.id());
-            node.setAccessibleText(label);
-            regionTooltips.get(region.id()).setText(label);
+        for (List<RegionView> views : regionViews.values()) {
+            for (RegionView view : views) {
+                String label = regionLabelProvider.apply(view.region());
+                view.path().setAccessibleText(label);
+                view.tooltip().setText(label);
+            }
         }
     }
 
@@ -89,9 +92,10 @@ public final class WorldMapPane extends Pane {
 
     public void resetView() {
         activeGroupId = null;
+        clearWrappedRegions();
         viewportState.reset();
         for (MapRegion region : definition.regions().values()) {
-            regionNodes.get(region.id()).pseudoClassStateChanged(OUTSIDE_GROUP, false);
+            refreshAppearance(region.id());
         }
         applyTransform();
     }
@@ -102,12 +106,16 @@ public final class WorldMapPane extends Pane {
             throw new IllegalArgumentException("Unknown map group: " + groupId);
         }
         activeGroupId = groupId;
-        viewportState.fitBounds(selectedGroup.focusBounds(), 0.08);
+        clearWrappedRegions();
+        if (selectedGroup.wrapsDateline()) {
+            double wrapOffset = wrapOffset(selectedGroup);
+            addWrappedRegions(wrapOffset);
+            viewportState.fitWrappedBounds(selectedGroup.focusBounds(), 0.08);
+        } else {
+            viewportState.fitBounds(selectedGroup.focusBounds(), 0.08);
+        }
         for (MapRegion region : definition.regions().values()) {
-            regionNodes.get(region.id()).pseudoClassStateChanged(
-                    OUTSIDE_GROUP,
-                    !groupId.equals(region.mapGroupId())
-            );
+            refreshAppearance(region.id());
         }
         applyTransform();
     }
@@ -121,26 +129,6 @@ public final class WorldMapPane extends Pane {
         refreshAppearance(regionId);
     }
 
-
-    public int regionCount() {
-        return regionNodes.size();
-    }
-
-    public MapViewportState viewportState() {
-        return viewportState;
-    }
-
-    public SVGPath regionNode(String regionId) {
-        SVGPath path = regionNodes.get(regionId);
-        if (path == null) {
-            throw new IllegalArgumentException("Unknown map region: " + regionId);
-        }
-        return path;
-    }
-
-    public String activeGroupId() {
-        return activeGroupId;
-    }
 
     @Override
     protected void layoutChildren() {
@@ -164,45 +152,83 @@ public final class WorldMapPane extends Pane {
 
     private void buildRegions() {
         for (MapRegion region : definition.orderedRegions()) {
-            SVGPath path = new SVGPath();
-            path.setId("region-" + region.id());
-            path.setContent(region.pathData());
-            path.setFillRule(region.evenOddFill() ? FillRule.EVEN_ODD : FillRule.NON_ZERO);
-            path.getStyleClass().addAll(
-                    "map-region",
-                    "map-region-" + region.mapGroupId().toLowerCase(Locale.ROOT).replace('_', '-')
-            );
-            path.setAccessibleRole(region.linked() ? AccessibleRole.BUTTON : AccessibleRole.NODE);
-            path.setFocusTraversable(region.linked());
-            path.setOnMouseEntered(event -> setHoveredRegion(region.id()));
-            path.setOnMouseExited(event -> setHoveredRegion(null));
-            path.focusedProperty().addListener((observable, wasFocused, isFocused) ->
-                    setFocusedRegion(isFocused ? region.id() : null)
-            );
-            path.setOnMouseClicked(event -> {
-                if (event.getButton() == MouseButton.PRIMARY) {
-                    if (suppressActivation) {
-                        suppressActivation = false;
-                    } else {
-                        activate(region);
-                    }
-                    event.consume();
-                }
-            });
-            path.setOnKeyPressed(event -> {
-                if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.SPACE) {
-                    activate(region);
-                    event.consume();
-                }
-            });
-            Tooltip tooltip = new Tooltip(regionLabelProvider.apply(region));
-            Tooltip.install(path, tooltip);
-            path.setAccessibleText(regionLabelProvider.apply(region));
-            regionNodes.put(region.id(), path);
-            regionTooltips.put(region.id(), tooltip);
-            mapGroup.getChildren().add(path);
-            refreshAppearance(region.id());
+            addRegionView(region, "region-" + region.id(), 0);
         }
+    }
+
+    private void addWrappedRegions(double wrapOffset) {
+        for (MapRegion region : definition.orderedRegions()) {
+            wrappedRegionViews.add(addRegionView(
+                    region,
+                    "wrapped-region-" + region.id(),
+                    wrapOffset
+            ));
+        }
+    }
+
+    private RegionView addRegionView(MapRegion region, String nodeId, double translateX) {
+        SVGPath path = new SVGPath();
+        path.setId(nodeId);
+        path.setContent(region.pathData());
+        path.setFillRule(region.evenOddFill() ? FillRule.EVEN_ODD : FillRule.NON_ZERO);
+        path.setTranslateX(translateX);
+        path.getStyleClass().addAll(
+                "map-region",
+                "map-region-" + region.mapGroupId().toLowerCase(Locale.ROOT).replace('_', '-')
+        );
+        path.setAccessibleRole(region.linked() ? AccessibleRole.BUTTON : AccessibleRole.NODE);
+        path.setFocusTraversable(region.linked());
+        path.setOnMouseEntered(event -> setHoveredRegion(region.id()));
+        path.setOnMouseExited(event -> setHoveredRegion(null));
+        path.focusedProperty().addListener((observable, wasFocused, isFocused) ->
+                setFocusedRegion(isFocused ? region.id() : null)
+        );
+        path.setOnMouseClicked(event -> {
+            if (event.getButton() == MouseButton.PRIMARY) {
+                if (suppressActivation) {
+                    suppressActivation = false;
+                } else {
+                    activate(region);
+                }
+                event.consume();
+            }
+        });
+        path.setOnKeyPressed(event -> {
+            if (event.getCode() == KeyCode.ENTER || event.getCode() == KeyCode.SPACE) {
+                activate(region);
+                event.consume();
+            }
+        });
+        String label = regionLabelProvider.apply(region);
+        Tooltip tooltip = new Tooltip(label);
+        Tooltip.install(path, tooltip);
+        path.setAccessibleText(label);
+        RegionView view = new RegionView(region, path, tooltip);
+        regionViews.computeIfAbsent(region.id(), ignored -> new ArrayList<>()).add(view);
+        mapGroup.getChildren().add(path);
+        refreshAppearance(region.id());
+        return view;
+    }
+
+    private void clearWrappedRegions() {
+        for (RegionView view : wrappedRegionViews) {
+            Tooltip.uninstall(view.path(), view.tooltip());
+            mapGroup.getChildren().remove(view.path());
+            regionViews.get(view.region().id()).remove(view);
+        }
+        wrappedRegionViews.clear();
+    }
+
+    private double wrapOffset(MapGroup group) {
+        MapBounds world = definition.bounds();
+        boolean crossesLeft = group.focusBounds().minX() < world.minX();
+        boolean crossesRight = group.focusBounds().maxX() > world.maxX();
+        if (crossesLeft == crossesRight) {
+            throw new IllegalArgumentException(
+                    "Wrapped map group focus must cross exactly one horizontal world edge: " + group.id()
+            );
+        }
+        return crossesRight ? world.width() : -world.width();
     }
 
     private void installViewportInteraction() {
@@ -286,14 +312,21 @@ public final class WorldMapPane extends Pane {
         if (regionId == null) {
             return;
         }
-        SVGPath path = regionNodes.get(regionId);
+        MapRegion region = definition.regions().get(regionId);
         MapInteractionState.RegionAppearance appearance = interactionState.appearance(regionId);
-        path.pseudoClassStateChanged(LINKED, definition.regions().get(regionId).linked());
-        path.pseudoClassStateChanged(NO_DATA, appearance.noData());
-        path.pseudoClassStateChanged(NEEDS_REVIEW, appearance.needsReview());
-        path.pseudoClassStateChanged(HOVERED, appearance.hovered());
-        path.pseudoClassStateChanged(FOCUSED, appearance.focused());
-        path.pseudoClassStateChanged(SELECTED, appearance.selected());
+        for (RegionView view : regionViews.get(regionId)) {
+            SVGPath path = view.path();
+            path.pseudoClassStateChanged(LINKED, region.linked());
+            path.pseudoClassStateChanged(NO_DATA, appearance.noData());
+            path.pseudoClassStateChanged(NEEDS_REVIEW, appearance.needsReview());
+            path.pseudoClassStateChanged(HOVERED, appearance.hovered());
+            path.pseudoClassStateChanged(FOCUSED, appearance.focused());
+            path.pseudoClassStateChanged(SELECTED, appearance.selected());
+            path.pseudoClassStateChanged(
+                    OUTSIDE_GROUP,
+                    activeGroupId != null && !activeGroupId.equals(region.mapGroupId())
+            );
+        }
     }
 
     private void applyTransform() {
@@ -303,4 +336,7 @@ public final class WorldMapPane extends Pane {
                 0, transform.scale(), transform.translateY()
         );
     }
+    private record RegionView(MapRegion region, SVGPath path, Tooltip tooltip) {
+    }
+
 }

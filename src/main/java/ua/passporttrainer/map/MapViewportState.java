@@ -8,7 +8,10 @@ public final class MapViewportState {
     public static final double MIN_ZOOM = 1.0;
     public static final double MAX_ZOOM = 8.0;
 
-    private final MapBounds worldBounds;
+    private final MapBounds baseWorldBounds;
+    private MapBounds navigationBounds;
+    private MapBounds fittedBounds;
+    private double fittedPaddingRatio;
     private double viewportWidth = 1.0;
     private double viewportHeight = 1.0;
     private double zoom = MIN_ZOOM;
@@ -16,9 +19,10 @@ public final class MapViewportState {
     private double centerY;
 
     public MapViewportState(MapBounds worldBounds) {
-        this.worldBounds = Objects.requireNonNull(worldBounds, "worldBounds");
-        centerX = worldBounds.minX() + worldBounds.width() / 2.0;
-        centerY = worldBounds.minY() + worldBounds.height() / 2.0;
+        baseWorldBounds = Objects.requireNonNull(worldBounds, "worldBounds");
+        navigationBounds = baseWorldBounds;
+        centerX = baseWorldBounds.minX() + baseWorldBounds.width() / 2.0;
+        centerY = baseWorldBounds.minY() + baseWorldBounds.height() / 2.0;
     }
 
     public void resize(double width, double height) {
@@ -26,13 +30,19 @@ public final class MapViewportState {
         requirePositiveFinite(height, "height");
         viewportWidth = width;
         viewportHeight = height;
-        clampCenter();
+        if (fittedBounds == null) {
+            clampCenter();
+        } else {
+            applyFit();
+        }
     }
 
     public void reset() {
+        navigationBounds = baseWorldBounds;
+        fittedBounds = null;
         zoom = MIN_ZOOM;
-        centerX = worldBounds.minX() + worldBounds.width() / 2.0;
-        centerY = worldBounds.minY() + worldBounds.height() / 2.0;
+        centerX = baseWorldBounds.minX() + baseWorldBounds.width() / 2.0;
+        centerY = baseWorldBounds.minY() + baseWorldBounds.height() / 2.0;
     }
 
     public void zoomAt(double factor, double viewportX, double viewportY) {
@@ -44,6 +54,7 @@ public final class MapViewportState {
         if (newZoom == zoom) {
             return;
         }
+        fittedBounds = null;
         zoom = newZoom;
         double scale = scale();
         centerX = anchor.x() - (viewportX - viewportWidth / 2.0) / scale;
@@ -55,6 +66,7 @@ public final class MapViewportState {
     public void panBy(double deltaX, double deltaY) {
         requireFinite(deltaX, "deltaX");
         requireFinite(deltaY, "deltaY");
+        fittedBounds = null;
         double scale = scale();
         centerX -= deltaX / scale;
         centerY -= deltaY / scale;
@@ -62,17 +74,23 @@ public final class MapViewportState {
     }
 
     public void fitBounds(MapBounds target, double paddingRatio) {
+        navigationBounds = baseWorldBounds;
+        rememberFit(target, paddingRatio);
+    }
+
+    void fitWrappedBounds(MapBounds target, double paddingRatio) {
         Objects.requireNonNull(target, "target");
-        if (!Double.isFinite(paddingRatio) || paddingRatio < 0 || paddingRatio >= 0.5) {
-            throw new IllegalArgumentException("paddingRatio must be between 0 and 0.5");
+        if (target.width() > baseWorldBounds.width()) {
+            throw new IllegalArgumentException("Wrapped target must be narrower than the world");
         }
-        double availableWidth = viewportWidth * (1.0 - 2.0 * paddingRatio);
-        double availableHeight = viewportHeight * (1.0 - 2.0 * paddingRatio);
-        double targetScale = Math.min(availableWidth / target.width(), availableHeight / target.height());
-        zoom = clamp(targetScale / fitScale(), MIN_ZOOM, MAX_ZOOM);
-        centerX = target.minX() + target.width() / 2.0;
-        centerY = target.minY() + target.height() / 2.0;
-        clampCenter();
+        double targetCenterX = target.minX() + target.width() / 2.0;
+        navigationBounds = new MapBounds(
+                targetCenterX - baseWorldBounds.width() / 2.0,
+                baseWorldBounds.minY(),
+                baseWorldBounds.width(),
+                baseWorldBounds.height()
+        );
+        rememberFit(target, paddingRatio);
     }
 
     public Transform transform() {
@@ -96,16 +114,34 @@ public final class MapViewportState {
         return zoom;
     }
 
-    public double viewportWidth() {
-        return viewportWidth;
+
+    private void rememberFit(MapBounds target, double paddingRatio) {
+        fittedBounds = Objects.requireNonNull(target, "target");
+        if (!Double.isFinite(paddingRatio) || paddingRatio < 0 || paddingRatio >= 0.5) {
+            throw new IllegalArgumentException("paddingRatio must be between 0 and 0.5");
+        }
+        fittedPaddingRatio = paddingRatio;
+        applyFit();
     }
 
-    public double viewportHeight() {
-        return viewportHeight;
+    private void applyFit() {
+        double availableWidth = viewportWidth * (1.0 - 2.0 * fittedPaddingRatio);
+        double availableHeight = viewportHeight * (1.0 - 2.0 * fittedPaddingRatio);
+        double targetScale = Math.min(
+                availableWidth / fittedBounds.width(),
+                availableHeight / fittedBounds.height()
+        );
+        zoom = clamp(targetScale / fitScale(), MIN_ZOOM, MAX_ZOOM);
+        centerX = fittedBounds.minX() + fittedBounds.width() / 2.0;
+        centerY = fittedBounds.minY() + fittedBounds.height() / 2.0;
+        clampCenter();
     }
 
     private double fitScale() {
-        return Math.min(viewportWidth / worldBounds.width(), viewportHeight / worldBounds.height());
+        return Math.min(
+                viewportWidth / baseWorldBounds.width(),
+                viewportHeight / baseWorldBounds.height()
+        );
     }
 
     private double scale() {
@@ -115,8 +151,12 @@ public final class MapViewportState {
     private void clampCenter() {
         double halfVisibleWidth = viewportWidth / (2.0 * scale());
         double halfVisibleHeight = viewportHeight / (2.0 * scale());
-        centerX = clampAxis(centerX, worldBounds.minX(), worldBounds.maxX(), halfVisibleWidth);
-        centerY = clampAxis(centerY, worldBounds.minY(), worldBounds.maxY(), halfVisibleHeight);
+        centerX = clampAxis(
+                centerX, navigationBounds.minX(), navigationBounds.maxX(), halfVisibleWidth
+        );
+        centerY = clampAxis(
+                centerY, navigationBounds.minY(), navigationBounds.maxY(), halfVisibleHeight
+        );
     }
 
     private static double clampAxis(double value, double minimum, double maximum, double halfVisible) {

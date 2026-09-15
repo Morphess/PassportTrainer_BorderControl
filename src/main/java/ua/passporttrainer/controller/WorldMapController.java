@@ -211,7 +211,8 @@ public final class WorldMapController {
                         resources.getString("map.tooltipLinked"),
                         geographicName,
                         country.displayName(),
-                        country.documentCount()
+                        country.documentCount(),
+                        resources.getString("reviewStatus." + country.reviewStatus().name())
                 ))
                 .orElseGet(() -> MessageFormat.format(
                         resources.getString("map.tooltipUnlinked"), geographicName

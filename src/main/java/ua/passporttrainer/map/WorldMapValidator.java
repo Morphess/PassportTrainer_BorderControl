@@ -96,10 +96,33 @@ public final class WorldMapValidator {
             if (!messages.containsKey(group.labelKey())) {
                 errors.add("missing localized map group label: " + group.labelKey());
             }
+            validateGroupFocus(definition.bounds(), group, errors);
         }
         MapGroup oceania = definition.groups().get("AUSTRALIA_OCEANIA");
         if (oceania != null && !oceania.wrapsDateline()) {
             errors.add("AUSTRALIA_OCEANIA must declare dateline wrapping");
+        }
+    }
+
+    private static void validateGroupFocus(
+            MapBounds world,
+            MapGroup group,
+            List<String> errors
+    ) {
+        MapBounds focus = group.focusBounds();
+        boolean crossesLeft = focus.minX() < world.minX();
+        boolean crossesRight = focus.maxX() > world.maxX();
+        if (focus.minY() < world.minY() || focus.maxY() > world.maxY()) {
+            errors.add("map group " + group.id() + " focus exceeds vertical world bounds");
+        }
+        if (group.wrapsDateline()) {
+            if (crossesLeft == crossesRight || focus.width() > world.width()) {
+                errors.add("wrapped map group " + group.id()
+                        + " focus must cross exactly one horizontal world edge");
+            }
+        } else if (crossesLeft || crossesRight) {
+            errors.add("non-wrapped map group " + group.id()
+                    + " focus exceeds horizontal world bounds");
         }
     }
 
