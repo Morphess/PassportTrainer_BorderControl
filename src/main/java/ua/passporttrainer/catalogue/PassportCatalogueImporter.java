@@ -21,7 +21,7 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Objects;
 
-/** Rebuilds a SQLite reference catalogue exclusively from the canonical Stage 5 manifest. */
+/** Rebuilds an effective SQLite reference catalogue from Stage 5 data and explicit review decisions. */
 public final class PassportCatalogueImporter {
 
     private static final List<String> MANIFEST_FILES = List.of(
@@ -43,10 +43,14 @@ public final class PassportCatalogueImporter {
         this.migrationRunner = Objects.requireNonNull(migrationRunner, "migrationRunner");
     }
 
-    public void rebuild(Path manifestDirectory) throws IOException, SQLException {
+    public void rebuild(Path manifestDirectory, Path reviewSourcePath) throws IOException, SQLException {
         Objects.requireNonNull(manifestDirectory, "manifestDirectory");
+        Objects.requireNonNull(reviewSourcePath, "reviewSourcePath");
         ManifestCatalogue catalogue = ManifestCatalogue.read(manifestDirectory);
         PassportManifestValidator.validate(catalogue);
+        ReviewDecisionSource reviewSource = ReviewDecisionSource.read(reviewSourcePath);
+        ReviewDecisionValidator.ReviewMaterialization materialization =
+                ReviewDecisionValidator.validate(catalogue, reviewSource);
         String manifestChecksum = manifestChecksum(manifestDirectory);
 
         migrationRunner.migrate(connectionProvider);
@@ -56,15 +60,16 @@ public final class PassportCatalogueImporter {
             try {
                 clearCatalogue(connection);
                 insertContinents(connection, catalogue);
-                insertEntities(connection, catalogue);
+                insertEntities(connection, catalogue, materialization);
                 insertEntitySourceNames(connection, catalogue);
                 insertEntityContinents(connection, catalogue);
-                insertDocuments(connection, catalogue);
-                insertImages(connection, catalogue);
+                insertDocuments(connection, catalogue, materialization);
+                insertImages(connection, catalogue, materialization);
                 updateDocumentDuplicates(connection, catalogue);
                 updateImageDuplicates(connection, catalogue);
                 insertAliases(connection, catalogue);
-                insertMetadata(connection, catalogue, manifestChecksum);
+                insertReviewDecisions(connection, reviewSource);
+                insertMetadata(connection, catalogue, manifestChecksum, reviewSource);
                 PassportCatalogueValidator.validate(connection);
                 connection.commit();
             } catch (SQLException | RuntimeException exception) {
@@ -76,6 +81,7 @@ public final class PassportCatalogueImporter {
 
     private static void clearCatalogue(Connection connection) throws SQLException {
         try (Statement statement = connection.createStatement()) {
+            statement.executeUpdate("DELETE FROM review_decisions");
             statement.executeUpdate("DELETE FROM aliases");
             statement.executeUpdate("DELETE FROM passport_images");
             statement.executeUpdate("DELETE FROM documents");
@@ -103,18 +109,24 @@ public final class PassportCatalogueImporter {
         }
     }
 
-    private static void insertEntities(Connection connection, ManifestCatalogue catalogue) throws SQLException {
+    private static void insertEntities(
+            Connection connection,
+            ManifestCatalogue catalogue,
+            ReviewDecisionValidator.ReviewMaterialization materialization
+    ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO entities(id, canonical_key, display_name_uk, entity_type, iso_alpha2, iso_alpha3, "
-                        + "review_status, notes) VALUES (?, ?, ?, ?, NULL, NULL, ?, ?)"
+                        + "review_status, notes, manifest_review_status) "
+                        + "VALUES (?, ?, ?, ?, NULL, NULL, ?, ?, ?)"
         )) {
             for (ManifestCatalogue.EntityEntry entity : catalogue.entities()) {
                 statement.setString(1, entity.id());
                 statement.setString(2, entity.canonicalKey());
                 statement.setString(3, entity.displayNameUk());
                 statement.setString(4, entity.entityType().name());
-                statement.setString(5, entity.reviewStatus().name());
+                statement.setString(5, materialization.entityStatuses().get(entity.id()).name());
                 statement.setString(6, entity.notes());
+                statement.setString(7, entity.reviewStatus().name());
                 statement.addBatch();
             }
             statement.executeBatch();
@@ -167,10 +179,15 @@ public final class PassportCatalogueImporter {
         statement.addBatch();
     }
 
-    private static void insertDocuments(Connection connection, ManifestCatalogue catalogue) throws SQLException {
+    private static void insertDocuments(
+            Connection connection,
+            ManifestCatalogue catalogue,
+            ReviewDecisionValidator.ReviewMaterialization materialization
+    ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO documents(id, entity_id, document_type, title_uk, variant, review_status, "
-                        + "quiz_eligible, duplicate_of_document_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?)"
+                        + "quiz_eligible, duplicate_of_document_id, notes, manifest_review_status, "
+                        + "manifest_quiz_eligible) VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?, ?)"
         )) {
             for (ManifestCatalogue.DocumentEntry document : catalogue.documents()) {
                 statement.setString(1, document.id());
@@ -178,20 +195,26 @@ public final class PassportCatalogueImporter {
                 statement.setString(3, document.documentType().name());
                 statement.setString(4, document.titleUk());
                 statement.setString(5, document.variant());
-                statement.setString(6, document.reviewStatus().name());
-                statement.setInt(7, document.quizEligible() ? 1 : 0);
+                statement.setString(6, materialization.documentStatuses().get(document.id()).name());
+                statement.setInt(7, materialization.quizEligibility().get(document.id()) ? 1 : 0);
                 statement.setString(8, document.notes());
+                statement.setString(9, document.reviewStatus().name());
+                statement.setInt(10, document.quizEligible() ? 1 : 0);
                 statement.addBatch();
             }
             statement.executeBatch();
         }
     }
 
-    private static void insertImages(Connection connection, ManifestCatalogue catalogue) throws SQLException {
+    private static void insertImages(
+            Connection connection,
+            ManifestCatalogue catalogue,
+            ReviewDecisionValidator.ReviewMaterialization materialization
+    ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO passport_images(id, document_id, source_relative_path, source_filename, mime_type, "
-                        + "format, width, height, file_size, sha256, review_status, duplicate_of_image_id, notes) "
-                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)"
+                        + "format, width, height, file_size, sha256, review_status, duplicate_of_image_id, notes, "
+                        + "manifest_review_status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)"
         )) {
             for (ManifestCatalogue.ImageEntry image : catalogue.images()) {
                 statement.setString(1, image.id());
@@ -204,8 +227,9 @@ public final class PassportCatalogueImporter {
                 statement.setInt(8, image.height());
                 statement.setLong(9, image.fileSize());
                 statement.setString(10, image.sha256());
-                statement.setString(11, image.reviewStatus().name());
+                statement.setString(11, materialization.imageStatuses().get(image.id()).name());
                 statement.setString(12, image.notes());
+                statement.setString(13, image.reviewStatus().name());
                 statement.addBatch();
             }
             statement.executeBatch();
@@ -265,15 +289,41 @@ public final class PassportCatalogueImporter {
         }
     }
 
+    private static void insertReviewDecisions(
+            Connection connection,
+            ReviewDecisionSource source
+    ) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(
+                "INSERT INTO review_decisions(record_type, target_type, target_id, "
+                        + "target_fingerprint_sha256, decision, reviewer, decided_at, note) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+        )) {
+            for (ReviewDecisionSource.DecisionRecord record : source.records()) {
+                statement.setString(1, record.recordType().name());
+                statement.setString(2, record.targetType().name());
+                statement.setString(3, record.targetId());
+                statement.setString(4, record.targetFingerprintSha256());
+                statement.setString(5, record.decision().name());
+                statement.setString(6, record.reviewer());
+                statement.setString(7, record.decidedAt().toString());
+                statement.setString(8, record.note());
+                statement.addBatch();
+            }
+            statement.executeBatch();
+        }
+    }
+
     private static void insertMetadata(
             Connection connection,
             ManifestCatalogue catalogue,
-            String manifestChecksum
+            String manifestChecksum,
+            ReviewDecisionSource reviewSource
     ) throws SQLException {
         try (PreparedStatement statement = connection.prepareStatement(
                 "INSERT INTO catalogue_metadata(singleton_id, manifest_schema_version, source_root, continent_count, "
-                        + "entity_count, document_count, image_count, manifest_checksum_sha256) "
-                        + "VALUES (1, ?, ?, ?, ?, ?, ?, ?)"
+                        + "entity_count, document_count, image_count, manifest_checksum_sha256, "
+                        + "review_schema_version, review_decision_count, review_source_checksum_sha256) "
+                        + "VALUES (1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )) {
             ManifestCatalogue.Summary summary = catalogue.summary();
             statement.setInt(1, summary.schemaVersion());
@@ -283,6 +333,9 @@ public final class PassportCatalogueImporter {
             statement.setInt(5, summary.documentCount());
             statement.setInt(6, summary.imageCount());
             statement.setString(7, manifestChecksum);
+            statement.setInt(8, ReviewDecisionSource.SCHEMA_VERSION);
+            statement.setInt(9, reviewSource.records().size());
+            statement.setString(10, reviewSource.checksum());
             statement.executeUpdate();
         }
     }

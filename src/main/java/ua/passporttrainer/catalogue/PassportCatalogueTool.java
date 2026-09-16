@@ -13,15 +13,16 @@ public final class PassportCatalogueTool {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length == 3 && args[0].equals("rebuild")) {
+        if (args.length == 4 && args[0].equals("rebuild")) {
             Path manifestDirectory = Path.of(args[1]);
-            Path databasePath = Path.of(args[2]);
+            Path reviewSource = Path.of(args[2]);
+            Path databasePath = Path.of(args[3]);
             Path parent = databasePath.toAbsolutePath().normalize().getParent();
             if (parent != null) {
                 Files.createDirectories(parent);
             }
             SQLiteConnectionProvider writableProvider = new SQLiteConnectionProvider(databasePath);
-            new PassportCatalogueImporter(writableProvider).rebuild(manifestDirectory);
+            new PassportCatalogueImporter(writableProvider).rebuild(manifestDirectory, reviewSource);
             String fingerprint = validateAndFingerprint(databasePath);
             System.out.println("Catalogue rebuilt; logical SHA-256=" + fingerprint);
             return;
@@ -31,7 +32,7 @@ public final class PassportCatalogueTool {
             return;
         }
         throw new IllegalArgumentException(
-                "Usage: rebuild <manifest-directory> <database-path> | validate <database-path>"
+                "Usage: rebuild <manifest-directory> <review-source> <database-path> | validate <database-path>"
         );
     }
 

@@ -62,25 +62,34 @@ The roadmap preserves the established architecture and product scope. Details re
 - **Delivered:** an approved clean cutover from numeric/string questions to stable typed identities; four question strategies; a prepared canonical candidate query; verified/known-type/eligibility and duplicate defenses; canonical continent/entity/document-type scopes; semantic distractor selection; one injectable seeded random source; complete-session-or-structured-failure behavior; explicit positive fixtures; and clean refusal of the intentionally empty production pool.
 - **Dependencies:** Stage 4C invariants, Stage 5 eligibility data, Stage 6 catalogue access, and the Stage 9 architecture audit.
 
-## 8. Learning and training modes — Stage 10
+## 8. Review, verification and quiz eligibility activation — Stage 10
+
+- **Status:** Completed in Stage 10.
+
+- **Goal:** preserve Stage 5 classification provenance while requiring explicit, auditable human verification and separate quiz activation.
+- **Primary result:** a version-controlled stable-ID review overlay, strict per-target drift fingerprints, an editorial CLI, and deterministic materialization into the read-only schema-version-2 catalogue.
+- **Delivered:** canonical UTF-8/LF review TSV with atomic replacement; independent entity/document/image decisions; explicit document activation/deactivation; fail-closed stale, duplicate, unresolved, excluded, and noncanonical validation; V1-to-V2 migration without inferred approvals; review provenance in SQLite; unchanged Stage 9 repository/service APIs; and an intentionally empty production review source with zero eligible records.
+- **Dependencies:** Stage 5 stable identities and classification, Stage 6 deterministic catalogue rebuilds, and Stage 9 fail-closed eligibility.
+
+## 9. Learning and training modes — Stage 11
 
 - **Goal:** provide the required learning and training experiences using the shared quiz engine.
 - **Primary result:** distinct learning and training flows with behavior appropriate to each existing product mode.
-- **Dependencies:** the completed Stage 9 quiz engine and Stage 7 catalogue UI foundations.
+- **Dependencies:** the completed Stage 9 quiz engine, Stage 10 reviewed-catalogue infrastructure, and Stage 7 catalogue UI foundations.
 
-## 9. Examination mode — Stage 11
+## 10. Examination mode — Stage 12
 
 - **Goal:** provide a controlled examination flow and reliable result calculation.
 - **Primary result:** examination lifecycle, completion rules, scoring, and result persistence consistent with established contracts.
-- **Dependencies:** the completed Stage 9 quiz engine, Stage 10 shared mode infrastructure, and writable result persistence.
+- **Dependencies:** the completed Stage 9 quiz engine, Stage 11 shared mode infrastructure, and writable result persistence.
 
-## 10. Users, settings and statistics
+## 11. Users, settings and statistics — Stage 13
 
 - **Goal:** complete local user, configuration, progress, result-history, and statistics capabilities already represented by service/repository boundaries.
 - **Primary result:** persisted users, settings, results, and user-facing statistics without bypassing repository contracts.
-- **Dependencies:** Stage 4 persistence foundation and stable behavior from Stages 8–9.
+- **Dependencies:** Stage 4 persistence foundation and stable behavior from Stages 8–12.
 
-## 11. Windows release
+## 12. Windows release — Stage 14
 
 - **Goal:** deliver and verify the application on its target Windows platform.
 - **Primary result:** a self-contained Windows runtime/package with verified startup, writable user-data placement, resources, and upgrade/install behavior.

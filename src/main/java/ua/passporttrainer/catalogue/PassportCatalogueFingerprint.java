@@ -22,13 +22,14 @@ public final class PassportCatalogueFingerprint {
                     "SELECT version, name, checksum_sha256 FROM schema_migrations ORDER BY version"),
             new Query("catalogue_metadata",
                     "SELECT singleton_id, manifest_schema_version, source_root, continent_count, entity_count, "
-                            + "document_count, image_count, manifest_checksum_sha256 "
+                            + "document_count, image_count, manifest_checksum_sha256, review_schema_version, "
+                            + "review_decision_count, review_source_checksum_sha256 "
                             + "FROM catalogue_metadata ORDER BY singleton_id"),
             new Query("continents",
                     "SELECT id, code, display_name_uk, source_name, sort_order FROM continents ORDER BY id"),
             new Query("entities",
                     "SELECT id, canonical_key, display_name_uk, entity_type, iso_alpha2, iso_alpha3, review_status, "
-                            + "notes FROM entities ORDER BY id"),
+                            + "manifest_review_status, notes FROM entities ORDER BY id"),
             new Query("entity_source_names",
                     "SELECT entity_id, source_name, sort_order FROM entity_source_names "
                             + "ORDER BY entity_id, sort_order"),
@@ -37,14 +38,19 @@ public final class PassportCatalogueFingerprint {
                             + "ORDER BY entity_id, sort_order"),
             new Query("documents",
                     "SELECT id, entity_id, document_type, title_uk, variant, review_status, quiz_eligible, "
-                            + "duplicate_of_document_id, notes FROM documents ORDER BY id"),
+                            + "manifest_review_status, manifest_quiz_eligible, duplicate_of_document_id, notes "
+                            + "FROM documents ORDER BY id"),
             new Query("passport_images",
                     "SELECT id, document_id, source_relative_path, source_filename, mime_type, format, width, height, "
-                            + "file_size, sha256, review_status, duplicate_of_image_id, notes "
+                            + "file_size, sha256, review_status, manifest_review_status, duplicate_of_image_id, notes "
                             + "FROM passport_images ORDER BY id"),
             new Query("aliases",
                     "SELECT kind, source_value, canonical_value, continent_id, entity_id, document_type "
-                            + "FROM aliases ORDER BY kind, source_value")
+                            + "FROM aliases ORDER BY kind, source_value"),
+            new Query("review_decisions",
+                    "SELECT record_type, target_type, target_id, target_fingerprint_sha256, decision, reviewer, "
+                            + "decided_at, note FROM review_decisions "
+                            + "ORDER BY record_type, target_type, target_id")
     );
 
     private PassportCatalogueFingerprint() {

@@ -433,3 +433,17 @@ Full import дає 7 `continents`, 139 `entities`, 521 `documents`, 521 `passpor
 Schema відтворюється plain SQL migration `V001__create_catalogue.sql`; lightweight runner зберігає SHA-256 migration checksum. Import виконується transactionally із foreign keys enabled, post-import integrity validation та rollback on failure. Repeatability порівнюється SHA-256 ordered logical rows, а не raw SQLite bytes, бо page layout не є catalogue contract.
 
 Packaged reference catalogue має відкриватися read-only. Future writable users/settings/results/statistics database залишається окремою та повинна бути розміщена в `%LOCALAPPDATA%\\PassportTrainer` на Windows, а не в application installation directory.
+
+## 12. Stage 10 review overlay and effective catalogue
+
+Stage 10 не змінює Stage 5 metadata/manifest і не редагує SQLite вручну. Human decisions зберігаються окремо в `data/passport-review/review-decisions.tsv` за stable entity/document/image IDs. Файл має canonical UTF-8/LF representation, exact header, deterministic `(recordType, targetType, targetId)` ordering і наразі містить тільки header: production approvals відсутні.
+
+`REVIEW` records підтримують `VERIFIED`, `NEEDS_REVIEW`, `EXCLUDED`; `QUIZ_ACTIVATION` records підтримують лише `ENABLED`, `DISABLED` для document. Верифікація entity, document та image незалежна. Verification не активує quiz: effective eligibility потребує explicit `ENABLED`, три effective `VERIFIED` statuses, known document type і canonical document/image.
+
+Кожне рішення фіксує schema-version-1 target SHA-256. Fingerprint використовує versioned length-prefixed binary serialization і material canonical fields: entity identity/type/name/geography/source names/base status; document association/type/title/variant/base status/base eligibility/duplicate link; image document/path/format/dimensions/size/content SHA-256/base status/duplicate link. Free-form notes навмисно не входять до fingerprint. Unknown target, material drift, duplicate/conflicting decision, unresolved/noncanonical activation або revocation enabled dependency без explicit deactivation fail closed.
+
+`V002__add_review_overlay.sql` не змінює V1. V2 додає manifest/base provenance columns, `review_decisions` і review source schema/count/checksum metadata. Existing `review_status` та `quiz_eligible` є effective materialized values. V1 upgrade копіює provenance, скидає effective eligibility до zero і не створює approvals.
+
+Rebuild order: validate Stage 5 manifest; parse/canonicalize review source; validate stable targets/fingerprints/activation; apply migrations; transactional manifest import; materialize effective state; copy decisions/provenance; validate reconstructed base plus effective state; commit. Runtime читає тільки read-only SQLite. `PassportRepository.findQuizEligibleCandidates()`, `QuizCandidate` та `QuizGenerationService` не змінені.
+
+Checked-in V2 catalogue має logical SHA-256 `12c5ca8720b727087ca70e63e4a67746ec9e693352eb205c8969025fe6a69be3`, zero review decisions і zero effective quiz-eligible documents. Real activation потребує окремих human-reviewed version-controlled decisions.

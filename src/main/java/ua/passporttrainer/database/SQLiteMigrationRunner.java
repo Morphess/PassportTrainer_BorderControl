@@ -19,10 +19,11 @@ import java.util.TreeMap;
 /** Applies the catalogue's ordered, checksummed SQL migrations. */
 public final class SQLiteMigrationRunner {
 
-    public static final int CURRENT_VERSION = 1;
+    public static final int CURRENT_VERSION = 2;
 
     private static final List<Migration> MIGRATIONS = List.of(
-            new Migration(1, "create_catalogue", "/db/migration/V001__create_catalogue.sql")
+            new Migration(1, "create_catalogue", "/db/migration/V001__create_catalogue.sql"),
+            new Migration(2, "add_review_overlay", "/db/migration/V002__add_review_overlay.sql")
     );
 
     public void migrate(DatabaseConnectionProvider connectionProvider) throws SQLException {

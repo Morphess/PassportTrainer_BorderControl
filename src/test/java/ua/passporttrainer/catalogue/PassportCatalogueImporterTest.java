@@ -131,7 +131,10 @@ class PassportCatalogueImporterTest {
     @Test
     void rebuildIsLogicallyDeterministicAcrossExistingAndIndependentDatabases() throws Exception {
         String first = PassportCatalogueFingerprint.sha256(provider);
-        new PassportCatalogueImporter(provider).rebuild(CatalogueTestSupport.MANIFEST_DIRECTORY);
+        new PassportCatalogueImporter(provider).rebuild(
+                CatalogueTestSupport.MANIFEST_DIRECTORY,
+                CatalogueTestSupport.REVIEW_SOURCE
+        );
         String rebuilt = PassportCatalogueFingerprint.sha256(provider);
 
         Path secondPath = temporaryDirectory.resolve("catalogue-second.sqlite");
@@ -156,7 +159,10 @@ class PassportCatalogueImporterTest {
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> new PassportCatalogueImporter(provider).rebuild(invalidManifest)
+                () -> new PassportCatalogueImporter(provider).rebuild(
+                        invalidManifest,
+                        CatalogueTestSupport.REVIEW_SOURCE
+                )
         );
         assertEquals(before, PassportCatalogueFingerprint.sha256(provider));
     }
@@ -174,7 +180,10 @@ class PassportCatalogueImporterTest {
 
         assertThrows(
                 SQLException.class,
-                () -> new PassportCatalogueImporter(provider).rebuild(CatalogueTestSupport.MANIFEST_DIRECTORY)
+                () -> new PassportCatalogueImporter(provider).rebuild(
+                        CatalogueTestSupport.MANIFEST_DIRECTORY,
+                        CatalogueTestSupport.REVIEW_SOURCE
+                )
         );
         assertEquals(before, PassportCatalogueFingerprint.sha256(provider));
         assertEquals(521, count("documents"));

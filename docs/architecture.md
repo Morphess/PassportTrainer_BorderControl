@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Stage 5 реалізував read-only manifest pipeline, Stage 6 — versioned SQLite catalogue pipeline та repository implementations, Stage 7 — browse-only catalogue UI, Stage 8 — інтерактивну карту поверх тих самих canonical IDs, а Stage 9 — UI-independent quiz generation engine. Режими гри, quiz UI та writable persistence належать наступним етапам.
+Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Stage 5 реалізував read-only manifest pipeline, Stage 6 — versioned SQLite catalogue pipeline та repository implementations, Stage 7 — browse-only catalogue UI, Stage 8 — інтерактивну карту поверх тих самих canonical IDs, Stage 9 — UI-independent quiz generation engine, а Stage 10 — version-controlled human-review overlay та materialized effective catalogue state. Режими гри, quiz UI та writable user persistence належать наступним етапам.
 
 ## Шари та дозволені залежності
 
@@ -133,6 +133,18 @@ Generated catalogue нормалізовано за рівнями continent, en
 
 Manifest і SQLite schema зберігають primary та alternate continent IDs через `entity_continents`. `Country` повертає primary `continentId`, а `CountryRepository.findByContinentId` шукає через усі membership rows, тому transcontinental entities з'являються в кожному відповідному canonical continent без дублювання domain identity.
 
+## Human review and quiz activation
+
+`data/passport-review/review-decisions.tsv` є єдиним authoritative джерелом human verification та quiz activation. Stage 5 manifest/metadata залишаються canonical classification sources і не переписуються review tooling. Runtime не читає review TSV: build-time importer валідує його проти exact manifest і materialize-ить effective state у read-only SQLite.
+
+Review TSV має strict UTF-8/LF canonical representation, exact header і deterministic ordering за `(recordType, targetType, targetId)`. `REVIEW` підтримує лише `VERIFIED`, `NEEDS_REVIEW`, `EXCLUDED` для `ENTITY`, `DOCUMENT`, `IMAGE`; `QUIZ_ACTIVATION` підтримує лише `ENABLED`, `DISABLED` для `DOCUMENT`. Відсутній row завжди означає відсутність human approval/activation.
+
+Entity, document та image review є незалежними. Document отримує effective `quiz_eligible=1` лише за explicit `ENABLED`, effective `VERIFIED` для entity/document/image, known `DocumentType` і canonical document/image duplicate identity. Enabled dependency не можна перевести з `VERIFIED` без попередньої explicit `DISABLED` mutation.
+
+Per-target fingerprint schema version 1 використовує namespace `passport-trainer-review-target`, big-endian length-prefixed UTF-8 text, list counts, fixed-width integer/long та boolean encodings перед SHA-256. Entity fingerprint включає ID, canonical key, entity type, semantic display name, primary continent, sorted alternate memberships, sorted source names і manifest status. Document fingerprint включає ID, entity association, document type, title, variant, manifest status/eligibility та duplicate relationship. Image fingerprint включає ID, document ID, validated source path/filename, MIME/format, dimensions, size, content SHA-256, manifest status і duplicate relationship. Free-form notes виключено навмисно: їх редагування не змінює перевірену identity/content.
+
+`PassportReviewTool` є editorial CLI, не JavaFX admin UI. Він list/inspect-ить canonical context, записує лише одну stable-ID mutation за операцію, повторно валідовує current source, перевіряє expected checksum, force-ить same-directory temporary file і вимагає atomic replacement. Bulk approval commands відсутні.
+
 ## Repository contracts
 
 | Repository | Відповідальність |
@@ -152,19 +164,29 @@ Manifest і SQLite schema зберігають primary та alternate continent 
 
 `DatabaseConnectionProvider` є мінімальною межею отримання JDBC-з'єднання. `SQLiteConnectionProvider` формує `jdbc:sqlite:` URL із нормалізованого абсолютного `Path`, вмикає foreign keys для кожного connection і підтримує explicit read-only mode для runtime catalogue. Закривати connection зобов'язаний caller через try-with-resources.
 
-`SQLiteMigrationRunner` застосовує ordered SQL resources, перевіряє name і SHA-256 уже застосованої migration та відмовляється від unknown/newer schema. Version 1 містить `schema_migrations`, `catalogue_metadata`, `continents`, `entities`, `entity_source_names`, `entity_continents`, `documents`, `passport_images` і `aliases`. Stable manifest IDs є `TEXT PRIMARY KEY`; duplicate references — self foreign keys; exact source path — portable POSIX relative text.
+`SQLiteMigrationRunner` застосовує ordered SQL resources, перевіряє name і SHA-256 уже застосованої migration та відмовляється від unknown/newer schema. V1 створює normalized canonical tables. V2 додає manifest/base provenance columns, strict `review_decisions`, review-source metadata та materialized effective state; V1 не змінено. Stable manifest IDs залишаються `TEXT PRIMARY KEY`; duplicate references — self foreign keys; exact source path — portable POSIX relative text.
 
-`PassportCatalogueImporter` читає тільки `ManifestCatalogue`, виконує source-independent Stage 5 contract validation, застосовує migration, перебудовує canonical rows у transaction і запускає `PassportCatalogueValidator` до commit. Importer не сканує passport assets, не класифікує filenames і не змінює manifest. `PassportCatalogueFingerprint` обчислює SHA-256 ordered logical rows, тому determinism не залежить від SQLite page layout.
+`PassportCatalogueImporter` окремо валідовує `ManifestCatalogue`, читає canonical review source, перевіряє stable targets/fingerprints/activation до будь-якої database mutation, застосовує migrations і перебудовує catalogue у transaction. Manifest status/eligibility записуються в `manifest_review_status`/`manifest_quiz_eligible`; existing `review_status`/`quiz_eligible` містять effective materialized values. Decisions, review schema/count/checksum також копіюються у SQLite. Importer не сканує assets, не класифікує filenames і не змінює manifest/review source.
 
-Reference catalogue генерується під час build/release та встановлюється як read-only application data. Stage 7 versioned development artifact знаходиться в `data/passport-catalogue/passport-catalogue.sqlite`; його можна перевизначити через `passporttrainer.catalogue.path`. Майбутня writable DB для users, settings, results і statistics є окремим persistence concern: `%LOCALAPPDATA%\\PassportTrainer` на Windows і XDG user-data location на Linux. Writable state не розміщується в installation directory.
+`PassportCatalogueValidator` reconstruct-ить base review inputs із SQLite, повторно обчислює fingerprints/materialization, звіряє effective statuses/eligibility та review-source checksum і лише після цього допускає runtime. `PassportCatalogueFingerprint` включає V2 provenance, decisions і effective data, тому determinism не залежить від SQLite page layout.
 
-CLI після compilation:
+Reference catalogue генерується під час build/release та встановлюється як read-only application data. Versioned development artifact знаходиться в `data/passport-catalogue/passport-catalogue.sqlite`; його можна перевизначити через `passporttrainer.catalogue.path`. Review TSV і editorial tooling не потрібні packaged runtime. Майбутня writable DB для users, settings, results і statistics є окремим persistence concern: `%LOCALAPPDATA%\\PassportTrainer` на Windows і XDG user-data location на Linux.
+
+Catalogue CLI після compilation:
 
 ```bash
 java -cp <runtime-classpath> ua.passporttrainer.catalogue.PassportCatalogueTool \
-  rebuild data/passport-manifest <output>/passport-catalogue.sqlite
+  rebuild data/passport-manifest data/passport-review/review-decisions.tsv \
+  <output>/passport-catalogue.sqlite
 java -cp <runtime-classpath> ua.passporttrainer.catalogue.PassportCatalogueTool \
   validate <output>/passport-catalogue.sqlite
+```
+
+Review CLI:
+
+```bash
+java -cp <runtime-classpath> ua.passporttrainer.catalogue.PassportReviewTool \
+  validate data/passport-manifest data/passport-review/review-decisions.tsv
 ```
 
 ## Passport image location
@@ -262,13 +284,13 @@ Failure to open or validate catalogue creates an unavailable factory: START rema
 - UI тести не порівнюють pixel-perfect screenshots;
 - `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model;
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
-- SQLite integration tests перевіряють migration, foreign keys, full import, rollback, canonical counts/content, prepared quiz eligibility filtering, production zero-pool refusal, repositories, read-only composition та logical determinism; generator tests використовують лише explicit controlled candidate fixtures.
+- SQLite integration tests перевіряють migrations, V1-to-V2 fail-closed behavior, foreign keys, full import, rollback, canonical counts/content, review-source canonicalization/atomic replacement, fingerprint sensitivity/drift, independent review levels, explicit activation/deactivation, unchanged Stage 9 eligibility filtering, production zero-pool refusal, repositories, read-only composition та logical determinism; generator tests використовують лише explicit controlled candidate fixtures.
 
 ## Що навмисно не реалізовано
 
 - quiz screens і mode-specific learning/training/examination orchestration;
 - конкретний password hashing algorithm;
-- review editor;
+- JavaFX review/admin editor; Stage 10 review є окремим editorial CLI;
 - збереження активної quiz-сесії.
 
 Ці компоненти додаються окремими етапами без порушення зафіксованого напрямку залежностей.
