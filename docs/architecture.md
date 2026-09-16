@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Stage 5 реалізував read-only manifest pipeline, Stage 6 — versioned SQLite catalogue pipeline та repository implementations, Stage 7 — browse-only catalogue UI, а Stage 8 — інтерактивну карту поверх тих самих canonical IDs і navigation boundaries. Quiz generation, режими гри та writable persistence належать наступним етапам.
+Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Stage 5 реалізував read-only manifest pipeline, Stage 6 — versioned SQLite catalogue pipeline та repository implementations, Stage 7 — browse-only catalogue UI, Stage 8 — інтерактивну карту поверх тих самих canonical IDs, а Stage 9 — UI-independent quiz generation engine. Режими гри, quiz UI та writable persistence належать наступним етапам.
 
 ## Шари та дозволені залежності
 
@@ -99,9 +99,14 @@ Map metadata використовує окремий stable `mapRegionId` namesp
 | `ReviewStatus` | `VERIFIED`, `AUTO_CLASSIFIED`, `NEEDS_REVIEW` або `EXCLUDED`. |
 | `User` | Локальний користувач; містить тільки password hash, не відкритий пароль. |
 | `UserRole` | Роль `USER` або `ADMIN`. |
-| `QuizQuestion` | Запитання, варіанти й правильна відповідь. |
+| `QuizQuestionType` | Точний контракт чотирьох підтримуваних стратегій генерації. |
+| `QuizContent` | Sealed typed subject/option contract для country, document і document-type значень зі stable identity та окремим presentation label. |
+| `QuizCandidate` | Повна canonical eligibility projection документа, image, entity, continent memberships, review state, duplicate identity та SHA-256. |
+| `QuizGenerationRequest` | Immutable mode/count/options/type/scope/seed configuration однієї генерації. |
+| `QuizGenerationFailureReason` | Машинно-читані причини invalid request, недостатнього pool або distractors. |
+| `QuizQuestion` | Typed subject, typed options, stable correct-answer ID і семантичні invariants конкретного question type. |
 | `QuizSession` | Стан навчальної, тренувальної або екзаменаційної сесії. |
-| `QuizAnswer` | Відповідь користувача та результат її оцінювання. |
+| `QuizAnswer` | Stable selected-answer ID, час відповіді та результат її оцінювання. |
 | `ExamResult` | Підсумок завершеного екзамену. |
 
 Допоміжний `QuizMode` відображає три режими: `LEARNING`, `TRAINING`, `EXAMINATION`.
@@ -134,14 +139,14 @@ Manifest і SQLite schema зберігають primary та alternate continent 
 |---|---|
 | `ContinentRepository` | Упорядковане читання canonical continents. |
 | `CountryRepository` | Читання entities, continent memberships і пошук за ID/ISO-кодом. |
-| `PassportRepository` | Читання всіх документів entity та пов'язаних зображень. |
+| `PassportRepository` | Читання всіх документів entity, пов'язаних зображень і bounded projection канонічних quiz candidates. |
 | `UserRepository` | Пошук і збереження локальних користувачів. |
 | `ResultRepository` | Збереження та читання екзаменаційних результатів. |
 | `SettingsRepository` | Читання й збереження локальних налаштувань. |
 
-Контракти повертають domain-моделі. SQL, назви таблиць, `ResultSet` і JDBC-винятки не просочуються в controllers.
+Контракти повертають domain-моделі. SQL, назви таблиць, `ResultSet` і JDBC-винятки не просочуються в services або controllers.
 
-`SQLiteContinentRepository`, `SQLiteCountryRepository` і `SQLitePassportRepository` розташовані в `repository.sqlite`, залежать від `DatabaseConnectionProvider`, використовують prepared statements для параметризованих lookup і перетворюють `SQLException` на `RepositoryAccessException`. Вони не знають про TSV, source filesystem або JavaFX.
+`SQLiteContinentRepository`, `SQLiteCountryRepository` і `SQLitePassportRepository` розташовані в `repository.sqlite`, залежать від `DatabaseConnectionProvider`, використовують prepared statements і перетворюють `SQLException` на `RepositoryAccessException`. Вони не знають про TSV, source filesystem або JavaFX. Quiz-candidate statement виконує один bounded read із join лише потрібних entity/document/image/geography rows та вимагає `quiz_eligible=1`, три `VERIFIED` statuses, відомий `DocumentType` і відсутність document/image duplicate links.
 
 ## Database layer
 
@@ -180,14 +185,30 @@ Controller не будує filesystem paths і не сканує source collecti
 | `ContinentService` | `ContinentRepository` | Канонічний список континентів. |
 | `CountryService` | `CountryRepository` | Каталог entities, continent membership і lookup. |
 | `PassportService` | `PassportRepository` | Усі документи entity та їх зображення. |
-| `QuizService` | `ResultRepository`, `Clock` | Життєвий цикл валідної сесії, одноразове приймання відповіді, одноразове завершення та збереження результату лише для завершеного `EXAMINATION`. Генерація запитань ще не реалізована. |
+| `QuizService` | `ResultRepository`, `Clock` | Життєвий цикл валідної сесії, одноразове приймання stable answer ID, одноразове завершення та збереження результату лише для завершеного `EXAMINATION`. |
+| `QuizGenerationService` | `PassportRepository`, `Clock`, injectable seeded `RandomGenerator` factory | Eligibility defense, request scopes, question/distractor strategies, randomization, uniqueness і створення повної `QuizSession` або structured failure. |
 | `AuthenticationService` | `UserRepository`, `PasswordHasher` | Пошук активного користувача й делегування безпечної перевірки пароля. |
 | `StatisticsService` | `ResultRepository` | Читання результатів і базове агрегування балів. |
 | `SettingsService` | `SettingsRepository` | Читання/збереження параметрів без знання способу зберігання. |
 
-`Clock` передається в `QuizService`, щоб час можна було детерміновано контролювати в тестах. Конкретний алгоритм хешування паролів навмисно не закодований в `AuthenticationService`: він буде окремою реалізацією `PasswordHasher`.
+`Clock` передається в `QuizService` і `QuizGenerationService`, щоб час можна було детерміновано контролювати в тестах. `QuizGenerationService` додатково створює рівно один random source із request seed на одну генерацію; production constructor використовує `SplittableRandom`, а test constructor приймає factory. Конкретний алгоритм хешування паролів навмисно не закодований в `AuthenticationService`: він буде окремою реалізацією `PasswordHasher`.
 
-`QuizQuestion` вимагає непорожній prompt, щонайменше два унікальні options і належність correct answer до options. `QuizSession` вимагає непорожній набір запитань з унікальними ID, не більше однієї узгодженої відповіді на запитання та відсутність відповідей на сторонні запитання. `ExamResult` гарантує `0 <= correctAnswers <= totalQuestions`, додатну кількість запитань і невід'ємну тривалість.
+`QuizQuestion` вимагає щонайменше два options з унікальними stable IDs, рівно одну option з `correctAnswerId` та type-specific subject/option shape. `QuizSession` вимагає непорожній набір запитань з унікальними ID, не більше однієї узгодженої відповіді на запитання, належність selected answer до options і відсутність відповідей на сторонні запитання. `ExamResult` гарантує `0 <= correctAnswers <= totalQuestions`, додатну кількість запитань і невід'ємну тривалість.
+
+## Quiz generation
+
+Generation не використовує JavaFX, FXML, localized prompts або concrete SQLite API. `QuizGenerationService` один раз читає `QuizCandidate` records через `PassportRepository`, повторно перевіряє eligibility/status/type/canonical identity, застосовує canonical continent-membership, entity та document-type scopes, сортує candidates за stable IDs і прибирає повтори за canonical document та exact image SHA-256.
+
+Підтримуються рівно чотири `QuizQuestionType`:
+
+- `PASSPORT_TO_COUNTRY`: document subject, country options; distinct entities того самого canonical continent мають пріоритет, а global pool є fallback;
+- `COUNTRY_TO_PASSPORT`: country subject, document options від distinct entities; документи того самого type мають пріоритет;
+- `DOCUMENT_TYPE`: document subject і options лише з чотирьох відомих `DocumentType`, без `UNKNOWN`;
+- `FIND_ORDINARY_PASSPORT`: ordinary-type subject marker та document options із рівно одним `ORDINARY_PASSPORT`.
+
+Один Fisher–Yates path перемішує blueprint order, distractor pools і final options через той самий seeded random source. У сесії не повторюються semantic question key, canonical correct document або correct image SHA-256. Distractor IDs у межах питання унікальні; document options походять із уже deduplicated candidate pool.
+
+Generation є all-or-nothing. Некоректний request повертає `INVALID_REQUEST`; недостатній eligible pool — `INSUFFICIENT_ELIGIBLE_DATA`; неможливий semantic distractor set — `INSUFFICIENT_DISTRACTORS` із question type, requested count і observed pool size. Partial session, fallback на unverified records і synthetic production content заборонені. Поточний production catalogue має нуль eligible records, тому generation очікувано й чисто завершується structured insufficiency failure.
 
 ## Типовий потік виклику
 
@@ -224,7 +245,7 @@ Runtime composition:
 
 1. `ApplicationLocations` нормалізує configured catalogue/image locations;
 2. `CatalogueApplicationContext.openReadOnly` створює read-only `SQLiteConnectionProvider` і перевіряє migration version та catalogue integrity;
-3. context створює три SQLite repositories та відповідні services;
+3. context створює три SQLite repositories та `ContinentService`, `CountryService`, `PassportService` і `QuizGenerationService`;
 4. `PassportTrainerApplication` створює `PassportImageLocator` і `CatalogueControllerFactory`;
 5. factory окремо завантажує map resources, перевіряє hash/mappings/catalogue coverage і зберігає незалежний map availability state;
 6. `NavigationService` передає factory кожному `FXMLLoader`;
@@ -241,13 +262,12 @@ Failure to open or validate catalogue creates an unavailable factory: START rema
 - UI тести не порівнюють pixel-perfect screenshots;
 - `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model;
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
-- SQLite integration tests перевіряють migration, foreign keys, full import, rollback, canonical counts/content, repositories, read-only composition та logical determinism.
+- SQLite integration tests перевіряють migration, foreign keys, full import, rollback, canonical counts/content, prepared quiz eligibility filtering, production zero-pool refusal, repositories, read-only composition та logical determinism; generator tests використовують лише explicit controlled candidate fixtures.
 
 ## Що навмисно не реалізовано
 
-- генератори навчальних та екзаменаційних запитань;
+- quiz screens і mode-specific learning/training/examination orchestration;
 - конкретний password hashing algorithm;
-- learning, training та examination screens;
 - review editor;
 - збереження активної quiz-сесії.
 

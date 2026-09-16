@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import ua.passporttrainer.model.DocumentType;
 import ua.passporttrainer.model.EntityType;
+import ua.passporttrainer.model.QuizQuestionType;
 import ua.passporttrainer.model.ReviewStatus;
 import ua.passporttrainer.model.UserRole;
 
@@ -46,6 +47,19 @@ class ArchitectureTest {
                         "UNKNOWN"
                 ),
                 List.of(DocumentType.values()).stream().map(Enum::name).toList()
+        );
+    }
+
+    @Test
+    void quizQuestionTypesMatchTheGenerationContract() {
+        assertEquals(
+                List.of(
+                        "PASSPORT_TO_COUNTRY",
+                        "COUNTRY_TO_PASSPORT",
+                        "DOCUMENT_TYPE",
+                        "FIND_ORDINARY_PASSPORT"
+                ),
+                List.of(QuizQuestionType.values()).stream().map(Enum::name).toList()
         );
     }
 

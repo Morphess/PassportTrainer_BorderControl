@@ -9,9 +9,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import ua.passporttrainer.model.ExamResult;
+import ua.passporttrainer.model.DocumentType;
+import ua.passporttrainer.model.QuizContent;
 import ua.passporttrainer.model.QuizAnswer;
 import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.model.QuizQuestion;
+import ua.passporttrainer.model.QuizQuestionType;
 import ua.passporttrainer.model.QuizSession;
 import ua.passporttrainer.repository.ResultRepository;
 
@@ -39,14 +42,14 @@ class QuizServiceTest {
 
     @Test
     void recordsCorrectAnswer() {
-        QuizSession session = startSession(QuizMode.TRAINING, question(1, "Ukraine"));
+        QuizSession session = startSession(QuizMode.TRAINING, question(1, "entity:ukraine"));
 
-        QuizSession answered = quizService.submitAnswer(session, 1, "Ukraine");
+        QuizSession answered = quizService.submitAnswer(session, 1, "entity:ukraine");
 
         QuizAnswer answer = answered.answers().getFirst();
         assertAll(
                 () -> assertEquals(1, answered.answers().size()),
-                () -> assertEquals("Ukraine", answer.selectedAnswer()),
+                () -> assertEquals("entity:ukraine", answer.selectedAnswerId()),
                 () -> assertTrue(answer.correct()),
                 () -> assertEquals(NOW, answer.answeredAt())
         );
@@ -54,21 +57,21 @@ class QuizServiceTest {
 
     @Test
     void recordsIncorrectAnswer() {
-        QuizSession session = startSession(QuizMode.TRAINING, question(1, "Ukraine"));
+        QuizSession session = startSession(QuizMode.TRAINING, question(1, "entity:ukraine"));
 
-        QuizSession answered = quizService.submitAnswer(session, 1, "Poland");
+        QuizSession answered = quizService.submitAnswer(session, 1, "entity:poland");
 
         assertFalse(answered.answers().getFirst().correct());
     }
 
     @Test
     void rejectsDuplicateAnswerWithoutIncreasingScore() {
-        QuizSession session = startSession(QuizMode.EXAMINATION, question(1, "Ukraine"));
-        QuizSession answered = quizService.submitAnswer(session, 1, "Ukraine");
+        QuizSession session = startSession(QuizMode.EXAMINATION, question(1, "entity:ukraine"));
+        QuizSession answered = quizService.submitAnswer(session, 1, "entity:ukraine");
 
         assertThrows(
                 IllegalStateException.class,
-                () -> quizService.submitAnswer(answered, 1, "Ukraine")
+                () -> quizService.submitAnswer(answered, 1, "entity:ukraine")
         );
 
         ExamResult result = quizService.saveExamResult(10, quizService.completeSession(answered));
@@ -83,19 +86,19 @@ class QuizServiceTest {
     @Test
     void rejectsAnswerAfterSessionCompletion() {
         QuizSession completed = quizService.completeSession(
-                startSession(QuizMode.TRAINING, question(1, "Ukraine"))
+                startSession(QuizMode.TRAINING, question(1, "entity:ukraine"))
         );
 
         assertThrows(
                 IllegalStateException.class,
-                () -> quizService.submitAnswer(completed, 1, "Ukraine")
+                () -> quizService.submitAnswer(completed, 1, "entity:ukraine")
         );
     }
 
     @Test
     void rejectsSecondSessionCompletion() {
         QuizSession completed = quizService.completeSession(
-                startSession(QuizMode.TRAINING, question(1, "Ukraine"))
+                startSession(QuizMode.TRAINING, question(1, "entity:ukraine"))
         );
 
         assertThrows(IllegalStateException.class, () -> quizService.completeSession(completed));
@@ -103,14 +106,8 @@ class QuizServiceTest {
 
     @Test
     void rejectsDuplicateQuestionIds() {
-        QuizQuestion first = question(1, "Ukraine");
-        QuizQuestion duplicate = new QuizQuestion(
-                1,
-                102,
-                "Identify the second document",
-                List.of("France", "Spain"),
-                "France"
-        );
+        QuizQuestion first = question(1, "entity:ukraine");
+        QuizQuestion duplicate = question(1, "entity:poland");
 
         assertThrows(
                 IllegalArgumentException.class,
@@ -124,10 +121,13 @@ class QuizServiceTest {
                 IllegalArgumentException.class,
                 () -> new QuizQuestion(
                         1,
-                        101,
-                        "Identify the country",
-                        List.of("Ukraine", "Poland"),
-                        "France"
+                        QuizQuestionType.PASSPORT_TO_COUNTRY,
+                        document(101, "entity:france"),
+                        List.of(
+                                new QuizContent.Country("entity:ukraine", "Ukraine"),
+                                new QuizContent.Country("entity:poland", "Poland")
+                        ),
+                        "entity:france"
                 )
         );
     }
@@ -138,10 +138,13 @@ class QuizServiceTest {
                 IllegalArgumentException.class,
                 () -> new QuizQuestion(
                         1,
-                        101,
-                        "Identify the country",
-                        List.of("Ukraine", "Ukraine"),
-                        "Ukraine"
+                        QuizQuestionType.PASSPORT_TO_COUNTRY,
+                        document(101, "entity:ukraine"),
+                        List.of(
+                                new QuizContent.Country("entity:ukraine", "Ukraine"),
+                                new QuizContent.Country("entity:ukraine", "Україна")
+                        ),
+                        "entity:ukraine"
                 )
         );
     }
@@ -157,7 +160,7 @@ class QuizServiceTest {
     @Test
     void savesOnlyExaminationResults() {
         QuizSession completedTraining = quizService.completeSession(
-                startSession(QuizMode.TRAINING, question(1, "Ukraine"))
+                startSession(QuizMode.TRAINING, question(1, "entity:ukraine"))
         );
 
         assertThrows(
@@ -173,10 +176,10 @@ class QuizServiceTest {
                 1,
                 2,
                 QuizMode.EXAMINATION,
-                List.of(question(1, "Ukraine"), question(2, "Poland"))
+                List.of(question(1, "entity:ukraine"), question(2, "entity:poland"))
         );
-        QuizSession firstAnswered = quizService.submitAnswer(session, 1, "Ukraine");
-        QuizSession allAnswered = quizService.submitAnswer(firstAnswered, 2, "Ukraine");
+        QuizSession firstAnswered = quizService.submitAnswer(session, 1, "entity:ukraine");
+        QuizSession allAnswered = quizService.submitAnswer(firstAnswered, 2, "entity:ukraine");
         QuizSession completed = quizService.completeSession(allAnswered);
 
         ExamResult result = quizService.saveExamResult(10, completed);
@@ -193,7 +196,7 @@ class QuizServiceTest {
 
     @Test
     void rejectsSavingIncompleteExamination() {
-        QuizSession examination = startSession(QuizMode.EXAMINATION, question(1, "Ukraine"));
+        QuizSession examination = startSession(QuizMode.EXAMINATION, question(1, "entity:ukraine"));
 
         assertThrows(
                 IllegalStateException.class,
@@ -212,43 +215,58 @@ class QuizServiceTest {
 
     @Test
     void rejectsInvalidQuestionDefinition() {
+        QuizContent.Document subject = document(101, "entity:ukraine");
+        List<QuizContent> options = List.of(
+                new QuizContent.Country("entity:ukraine", "Ukraine"),
+                new QuizContent.Country("entity:poland", "Poland")
+        );
+
         assertAll(
                 () -> assertThrows(
                         NullPointerException.class,
-                        () -> new QuizQuestion(1, 101, null, List.of("Ukraine"), "Ukraine")
-                ),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> new QuizQuestion(1, 101, " ", List.of("Ukraine"), "Ukraine")
+                        () -> new QuizQuestion(1, null, subject, options, "entity:ukraine")
                 ),
                 () -> assertThrows(
                         NullPointerException.class,
-                        () -> new QuizQuestion(1, 101, "Country", null, "Ukraine")
-                ),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
-                        () -> new QuizQuestion(1, 101, "Country", List.of(), "Ukraine")
-                ),
-                () -> assertThrows(
-                        IllegalArgumentException.class,
                         () -> new QuizQuestion(
-                                1,
-                                101,
-                                "Country",
-                                List.of("Ukraine"),
-                                "Ukraine"
+                                1, QuizQuestionType.PASSPORT_TO_COUNTRY,
+                                null, options, "entity:ukraine"
                         )
                 ),
                 () -> assertThrows(
                         NullPointerException.class,
-                        () -> new QuizQuestion(1, 101, "Country", List.of("Ukraine"), null)
+                        () -> new QuizQuestion(
+                                1, QuizQuestionType.PASSPORT_TO_COUNTRY,
+                                subject, null, "entity:ukraine"
+                        )
+                ),
+                () -> assertThrows(
+                        IllegalArgumentException.class,
+                        () -> new QuizQuestion(
+                                1, QuizQuestionType.PASSPORT_TO_COUNTRY,
+                                subject, List.of(), "entity:ukraine"
+                        )
+                ),
+                () -> assertThrows(
+                        IllegalArgumentException.class,
+                        () -> new QuizQuestion(
+                                1, QuizQuestionType.PASSPORT_TO_COUNTRY,
+                                subject, List.of(options.getFirst()), "entity:ukraine"
+                        )
+                ),
+                () -> assertThrows(
+                        NullPointerException.class,
+                        () -> new QuizQuestion(
+                                1, QuizQuestionType.PASSPORT_TO_COUNTRY,
+                                subject, options, null
+                        )
                 )
         );
     }
 
     @Test
     void rejectsInvalidSessionInputs() {
-        QuizQuestion question = question(1, "Ukraine");
+        QuizQuestion question = question(1, "entity:ukraine");
 
         assertAll(
                 () -> assertThrows(
@@ -261,7 +279,7 @@ class QuizServiceTest {
                 ),
                 () -> assertThrows(
                         NullPointerException.class,
-                        () -> quizService.submitAnswer(null, 1, "Ukraine")
+                        () -> quizService.submitAnswer(null, 1, "entity:ukraine")
                 ),
                 () -> assertThrows(
                         NullPointerException.class,
@@ -269,6 +287,14 @@ class QuizServiceTest {
                                 startSession(QuizMode.TRAINING, question),
                                 1,
                                 null
+                        )
+                ),
+                () -> assertThrows(
+                        IllegalArgumentException.class,
+                        () -> quizService.submitAnswer(
+                                startSession(QuizMode.TRAINING, question),
+                                1,
+                                "entity:france"
                         )
                 )
         );
@@ -283,17 +309,17 @@ class QuizServiceTest {
                 ),
                 () -> assertThrows(
                         NullPointerException.class,
-                        () -> new QuizAnswer(1, "Ukraine", true, null)
+                        () -> new QuizAnswer(1, "entity:ukraine", true, null)
                 )
         );
     }
 
     @Test
     void rejectsInconsistentPrebuiltSessionAnswers() {
-        QuizQuestion question = question(1, "Ukraine");
-        QuizAnswer unknownQuestion = new QuizAnswer(2, "Ukraine", true, NOW);
-        QuizAnswer wrongCorrectness = new QuizAnswer(1, "Ukraine", false, NOW);
-        QuizAnswer valid = new QuizAnswer(1, "Ukraine", true, NOW);
+        QuizQuestion question = question(1, "entity:ukraine");
+        QuizAnswer unknownQuestion = new QuizAnswer(2, "entity:ukraine", true, NOW);
+        QuizAnswer wrongCorrectness = new QuizAnswer(1, "entity:ukraine", false, NOW);
+        QuizAnswer valid = new QuizAnswer(1, "entity:ukraine", true, NOW);
 
         assertAll(
                 () -> assertThrows(
@@ -346,13 +372,27 @@ class QuizServiceTest {
         return quizService.startSession(1, 2, mode, List.of(question));
     }
 
-    private static QuizQuestion question(long id, String correctAnswer) {
+    private static QuizQuestion question(long id, String correctAnswerId) {
         return new QuizQuestion(
                 id,
-                100 + id,
-                "Identify the country",
-                List.of("Ukraine", "Poland"),
-                correctAnswer
+                QuizQuestionType.PASSPORT_TO_COUNTRY,
+                document(100 + id, correctAnswerId),
+                List.of(
+                        new QuizContent.Country("entity:ukraine", "Ukraine"),
+                        new QuizContent.Country("entity:poland", "Poland")
+                ),
+                correctAnswerId
+        );
+    }
+
+    private static QuizContent.Document document(long id, String entityId) {
+        return new QuizContent.Document(
+                "document:" + id,
+                entityId,
+                DocumentType.ORDINARY_PASSPORT,
+                "Ordinary passport",
+                "image:" + id,
+                "fixtures/" + id + ".jpg"
         );
     }
 

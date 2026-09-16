@@ -34,6 +34,7 @@ import ua.passporttrainer.map.WorldMapPane;
 import ua.passporttrainer.model.Country;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
+import ua.passporttrainer.model.QuizCandidate;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.repository.PassportRepository;
@@ -318,11 +319,17 @@ class CatalogueUiSmokeTest {
                         ? List.of(sourceImage, secondImage)
                         : List.of();
             }
+
+            @Override
+            public List<QuizCandidate> findQuizEligibleCandidates() {
+                return List.of();
+            }
         });
         CatalogueApplicationContext context = new CatalogueApplicationContext(
                 baseContext.continentService(),
                 baseContext.countryService(),
-                passportService
+                passportService,
+                baseContext.quizGenerationService()
         );
 
         onFxThread(() -> {

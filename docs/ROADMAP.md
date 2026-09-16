@@ -53,23 +53,26 @@ The roadmap preserves the established architecture and product scope. Details re
 - **Delivered:** reproducibly generated Natural Earth 5.1.1 Ukraine-POV Robinson SVG with validated atomic replacement; 249 stable `ADM0_A3` regions; explicit versioned mappings for 135 linked and 114 intentionally unlinked regions; explicit list-only coverage for the remaining 4 of 139 canonical entities; strict SVG/TSV integrity validation; six presentation groups over seven canonical continents, including cyclic dateline focus for Australia/Oceania; native JavaFX hover, selection, bounded zoom/pan/reset, keyboard access, Unicode fallback search, accessible review-status labels, document counts, and graceful map-unavailable fallback to the Stage 7 catalogue.
 - **Dependencies:** completed Stage 7 catalogue navigation and the approved Stage 8 map asset and interaction design.
 
-## 7. Quiz generation engine
+## 7. Quiz generation engine — Stage 9
+
+- **Status:** Completed in Stage 9.
 
 - **Goal:** generate valid country-identification and document-type questions with multiple answer options and controlled randomization.
-- **Primary result:** a domain-level question generator operating only on eligible canonical passport records.
-- **Dependencies:** Stage 4C invariants, Stage 5 eligibility data, and Stage 6 catalogue access.
+- **Primary result:** a UI-independent typed question generator operating only on eligible canonical passport records.
+- **Delivered:** an approved clean cutover from numeric/string questions to stable typed identities; four question strategies; a prepared canonical candidate query; verified/known-type/eligibility and duplicate defenses; canonical continent/entity/document-type scopes; semantic distractor selection; one injectable seeded random source; complete-session-or-structured-failure behavior; explicit positive fixtures; and clean refusal of the intentionally empty production pool.
+- **Dependencies:** Stage 4C invariants, Stage 5 eligibility data, Stage 6 catalogue access, and the Stage 9 architecture audit.
 
-## 8. Learning and training modes
+## 8. Learning and training modes — Stage 10
 
 - **Goal:** provide the required learning and training experiences using the shared quiz engine.
 - **Primary result:** distinct learning and training flows with behavior appropriate to each existing product mode.
-- **Dependencies:** Stage 7 question generation and catalogue UI foundations.
+- **Dependencies:** the completed Stage 9 quiz engine and Stage 7 catalogue UI foundations.
 
-## 9. Examination mode
+## 9. Examination mode — Stage 11
 
 - **Goal:** provide a controlled examination flow and reliable result calculation.
 - **Primary result:** examination lifecycle, completion rules, scoring, and result persistence consistent with established contracts.
-- **Dependencies:** Stage 7 quiz engine, Stage 8 shared mode infrastructure, and persistence from Stage 4.
+- **Dependencies:** the completed Stage 9 quiz engine, Stage 10 shared mode infrastructure, and writable result persistence.
 
 ## 10. Users, settings and statistics
 

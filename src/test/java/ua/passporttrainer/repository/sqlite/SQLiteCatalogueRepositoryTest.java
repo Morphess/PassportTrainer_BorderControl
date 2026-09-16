@@ -11,13 +11,19 @@ import ua.passporttrainer.model.DocumentType;
 import ua.passporttrainer.model.EntityType;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
+import ua.passporttrainer.model.QuizGenerationFailureReason;
+import ua.passporttrainer.model.QuizGenerationRequest;
+import ua.passporttrainer.model.QuizMode;
+import ua.passporttrainer.model.QuizQuestionType;
 import ua.passporttrainer.model.ReviewStatus;
+import ua.passporttrainer.service.QuizGenerationException;
 
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -116,6 +122,35 @@ class SQLiteCatalogueRepositoryTest {
         assertTrue(passportRepository.findById("document:missing").isEmpty());
         assertTrue(passportRepository.findByCountryId("entity:missing").isEmpty());
         assertTrue(passportRepository.findImagesByDocumentId("document:missing").isEmpty());
+    }
+
+    @Test
+    void productionCatalogueZeroPoolIsRefusedWithoutFallbackContent() throws Exception {
+        assertTrue(passportRepository.findQuizEligibleCandidates().isEmpty());
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(databasePath);
+        QuizGenerationRequest request = new QuizGenerationRequest(
+                1,
+                1,
+                QuizMode.TRAINING,
+                1,
+                2,
+                Set.of(QuizQuestionType.DOCUMENT_TYPE),
+                Set.of(),
+                Set.of(),
+                Set.of(),
+                1L
+        );
+
+        QuizGenerationException exception = assertThrows(
+                QuizGenerationException.class,
+                () -> context.quizGenerationService().generate(request)
+        );
+
+        assertEquals(
+                QuizGenerationFailureReason.INSUFFICIENT_ELIGIBLE_DATA,
+                exception.reason()
+        );
+        assertEquals(0, exception.availableCandidateCount());
     }
 
     @Test

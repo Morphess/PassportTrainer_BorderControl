@@ -8,12 +8,15 @@ import java.util.Objects;
  */
 public record QuizAnswer(
         long questionId,
-        String selectedAnswer,
+        String selectedAnswerId,
         boolean correct,
         Instant answeredAt
 ) {
     public QuizAnswer {
-        selectedAnswer = Objects.requireNonNull(selectedAnswer, "selectedAnswer");
+        selectedAnswerId = Objects.requireNonNull(selectedAnswerId, "selectedAnswerId");
+        if (selectedAnswerId.isBlank()) {
+            throw new IllegalArgumentException("selectedAnswerId must not be blank");
+        }
         answeredAt = Objects.requireNonNull(answeredAt, "answeredAt");
     }
 }

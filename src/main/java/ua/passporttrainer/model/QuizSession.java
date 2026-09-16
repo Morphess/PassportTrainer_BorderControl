@@ -46,7 +46,12 @@ public record QuizSession(
             if (!answeredQuestionIds.add(answer.questionId())) {
                 throw new IllegalArgumentException("question already answered: " + answer.questionId());
             }
-            boolean expectedCorrect = question.correctAnswer().equals(answer.selectedAnswer());
+            if (!question.hasOption(answer.selectedAnswerId())) {
+                throw new IllegalArgumentException(
+                        "answer does not identify a question option: " + answer.questionId()
+                );
+            }
+            boolean expectedCorrect = question.correctAnswerId().equals(answer.selectedAnswerId());
             if (answer.correct() != expectedCorrect) {
                 throw new IllegalArgumentException("answer correctness does not match question: " + answer.questionId());
             }

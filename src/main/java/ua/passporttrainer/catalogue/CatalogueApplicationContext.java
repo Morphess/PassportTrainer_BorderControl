@@ -11,7 +11,9 @@ import ua.passporttrainer.repository.sqlite.SQLitePassportRepository;
 import ua.passporttrainer.service.ContinentService;
 import ua.passporttrainer.service.CountryService;
 import ua.passporttrainer.service.PassportService;
+import ua.passporttrainer.service.QuizGenerationService;
 
+import java.time.Clock;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -21,13 +23,15 @@ import java.util.Objects;
 public record CatalogueApplicationContext(
         ContinentService continentService,
         CountryService countryService,
-        PassportService passportService
+        PassportService passportService,
+        QuizGenerationService quizGenerationService
 ) {
 
     public CatalogueApplicationContext {
         Objects.requireNonNull(continentService, "continentService");
         Objects.requireNonNull(countryService, "countryService");
         Objects.requireNonNull(passportService, "passportService");
+        Objects.requireNonNull(quizGenerationService, "quizGenerationService");
     }
 
     public static CatalogueApplicationContext openReadOnly(Path cataloguePath) throws SQLException {
@@ -47,7 +51,8 @@ public record CatalogueApplicationContext(
         return new CatalogueApplicationContext(
                 new ContinentService(continentRepository),
                 new CountryService(countryRepository),
-                new PassportService(passportRepository)
+                new PassportService(passportRepository),
+                new QuizGenerationService(passportRepository, Clock.systemUTC())
         );
     }
 }

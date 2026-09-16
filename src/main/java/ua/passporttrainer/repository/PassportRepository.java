@@ -5,6 +5,7 @@ import java.util.Optional;
 
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
+import ua.passporttrainer.model.QuizCandidate;
 
 public interface PassportRepository {
 
@@ -13,4 +14,6 @@ public interface PassportRepository {
     List<PassportDocument> findByCountryId(String countryId);
 
     List<PassportImage> findImagesByDocumentId(String passportDocumentId);
+
+    List<QuizCandidate> findQuizEligibleCandidates();
 }

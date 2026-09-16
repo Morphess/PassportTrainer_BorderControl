@@ -14,10 +14,7 @@ import ua.passporttrainer.model.QuizQuestion;
 import ua.passporttrainer.model.QuizSession;
 import ua.passporttrainer.repository.ResultRepository;
 
-/**
- * Coordinates quiz session state. Question generation rules are intentionally
- * deferred to a later development stage.
- */
+/** Coordinates quiz-session lifecycle after questions have been generated. */
 public final class QuizService {
 
     private final ResultRepository resultRepository;
@@ -45,9 +42,9 @@ public final class QuizService {
         );
     }
 
-    public QuizSession submitAnswer(QuizSession session, long questionId, String selectedAnswer) {
+    public QuizSession submitAnswer(QuizSession session, long questionId, String selectedAnswerId) {
         Objects.requireNonNull(session, "session");
-        Objects.requireNonNull(selectedAnswer, "selectedAnswer");
+        Objects.requireNonNull(selectedAnswerId, "selectedAnswerId");
         if (session.completed()) {
             throw new IllegalStateException("Quiz session is already completed");
         }
@@ -59,11 +56,14 @@ public final class QuizService {
                 .filter(candidate -> candidate.id() == questionId)
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("Unknown question: " + questionId));
+        if (!question.hasOption(selectedAnswerId)) {
+            throw new IllegalArgumentException("Unknown answer option: " + selectedAnswerId);
+        }
 
         QuizAnswer answer = new QuizAnswer(
                 questionId,
-                selectedAnswer,
-                question.correctAnswer().equals(selectedAnswer),
+                selectedAnswerId,
+                question.correctAnswerId().equals(selectedAnswerId),
                 clock.instant()
         );
         List<QuizAnswer> answers = new ArrayList<>(session.answers());
