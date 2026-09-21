@@ -84,12 +84,19 @@ class PassportCatalogueImporterTest {
     }
 
     @Test
-    void preservesReviewStatusAndQuizEligibility() throws Exception {
-        assertEquals(462, reviewStatusCount("documents", "AUTO_CLASSIFIED"));
-        assertEquals(59, reviewStatusCount("documents", "NEEDS_REVIEW"));
-        assertEquals(462, reviewStatusCount("passport_images", "AUTO_CLASSIFIED"));
-        assertEquals(59, reviewStatusCount("passport_images", "NEEDS_REVIEW"));
-        assertEquals(0, scalarInt("SELECT COUNT(*) FROM documents WHERE quiz_eligible = 1"));
+    void preservesManifestProvenanceAndMaterializesReviewedPilotState() throws Exception {
+        assertEquals(462, reviewStatusCount("documents", "manifest_review_status", "AUTO_CLASSIFIED"));
+        assertEquals(59, reviewStatusCount("documents", "manifest_review_status", "NEEDS_REVIEW"));
+        assertEquals(462, reviewStatusCount("passport_images", "manifest_review_status", "AUTO_CLASSIFIED"));
+        assertEquals(59, reviewStatusCount("passport_images", "manifest_review_status", "NEEDS_REVIEW"));
+        assertEquals(450, reviewStatusCount("documents", "review_status", "AUTO_CLASSIFIED"));
+        assertEquals(59, reviewStatusCount("documents", "review_status", "NEEDS_REVIEW"));
+        assertEquals(12, reviewStatusCount("documents", "review_status", "VERIFIED"));
+        assertEquals(450, reviewStatusCount("passport_images", "review_status", "AUTO_CLASSIFIED"));
+        assertEquals(59, reviewStatusCount("passport_images", "review_status", "NEEDS_REVIEW"));
+        assertEquals(12, reviewStatusCount("passport_images", "review_status", "VERIFIED"));
+        assertEquals(0, scalarInt("SELECT COUNT(*) FROM documents WHERE manifest_quiz_eligible = 1"));
+        assertEquals(12, scalarInt("SELECT COUNT(*) FROM documents WHERE quiz_eligible = 1"));
     }
 
     @Test
@@ -217,8 +224,8 @@ class PassportCatalogueImporterTest {
         return scalarInt("SELECT COUNT(*) FROM documents WHERE document_type = '" + documentType + "'");
     }
 
-    private int reviewStatusCount(String table, String reviewStatus) throws Exception {
-        return scalarInt("SELECT COUNT(*) FROM " + table + " WHERE review_status = '" + reviewStatus + "'");
+    private int reviewStatusCount(String table, String column, String reviewStatus) throws Exception {
+        return scalarInt("SELECT COUNT(*) FROM " + table + " WHERE " + column + " = '" + reviewStatus + "'");
     }
 
     private int count(String table) throws Exception {

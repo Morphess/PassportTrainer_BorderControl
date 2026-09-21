@@ -34,7 +34,7 @@ This document records the repository state after Stage 10. It distinguishes impl
 - `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
 - In-memory quiz-session lifecycle with typed validated questions, unique question IDs and answer-option IDs, one answer per question, immutable completion, bounded scores, and examination-only result-save delegation.
 - `QuizGenerationService`, which filters canonical verified eligible candidates, applies canonical continent/entity/document-type scopes, builds all four supported question types, selects semantic distractors, shuffles through one injectable seeded random source, prevents repeated correct documents/images, and returns only fully populated `QuizSession` instances.
-- One hundred forty-five JUnit tests, including isolated SQLite integration, review-source canonicalization and atomic-write safety, target-fingerprint sensitivity and drift rejection, disallowed activation targeting, V1-to-V2 migration safety, review materialization, unchanged Stage 9 integration, quiz-generation determinism/invariants/failures, production zero-pool refusal, Unicode search, map integrity/completeness, high-risk geopolitical mappings, dateline-wrapped viewport and interaction behavior, independent map-failure fallback, FXML loading, complete map/catalogue navigation, portable image resolution, real image decoding, and multi-image paging.
+- One hundred forty-five JUnit tests, including isolated SQLite integration, review-source canonicalization and atomic-write safety, target-fingerprint sensitivity and drift rejection, disallowed activation targeting, V1-to-V2 migration safety, review materialization, unchanged Stage 9 integration, reviewed production candidate-pool invariants, quiz-generation determinism/invariants/failures, isolated zero-pool failure behavior, Unicode search, map integrity/completeness, high-risk geopolitical mappings, dateline-wrapped viewport and interaction behavior, independent map-failure fallback, FXML loading, complete map/catalogue navigation, portable image resolution, real image decoding, and multi-image paging.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
@@ -43,8 +43,8 @@ This document records the repository state after Stage 10. It distinguishes impl
 - A deterministic transactional importer that consumes the independently validated Stage 5 manifest plus the validated Stage 10 review source, fails before mutation on stale review data, and produces a post-import validated logical catalogue fingerprint.
 - Working `SQLiteContinentRepository`, `SQLiteCountryRepository`, and `SQLitePassportRepository` implementations behind repository boundaries, with canonical `String` IDs, alternate geography, review status, aggregate entity document counts, image counts, and a prepared quiz-candidate query restricted to fully verified, known-type, quiz-eligible, non-duplicate records.
 - A non-JavaFX `CatalogueApplicationContext` that validates a read-only catalogue and wires all three SQLite repositories into `ContinentService`, `CountryService`, `PassportService`, and `QuizGenerationService`.
-- A deterministic generated schema-version-2 development catalogue at `data/passport-catalogue/passport-catalogue.sqlite`; its ordered logical SHA-256 is `12c5ca8720b727087ca70e63e4a67746ec9e693352eb205c8969025fe6a69be3`.
-- A canonical version-controlled `data/passport-review/review-decisions.tsv` source with stable entity/document/image IDs, separate review and activation records, per-target schema-version-1 SHA-256 fingerprints, strict drift validation, and no production decisions.
+- A deterministic generated schema-version-2 development catalogue at `data/passport-catalogue/passport-catalogue.sqlite`; its current ordered logical SHA-256 is `577043d6202c3666eed15ed986173a1df9e28fa566d57e5594b406ccd8a4f936`.
+- A canonical version-controlled `data/passport-review/review-decisions.tsv` source with stable entity/document/image IDs, separate review and activation records, per-target schema-version-1 SHA-256 fingerprints, strict drift validation, and a deliberately bounded Stage 10A pilot containing 4 verified entities, 12 verified documents, 12 verified images, and 12 enabled activations.
 - A non-JavaFX editorial `PassportReviewTool` supporting pending/reviewed listing, complete target inspection, single-target review decisions, explicit activation/deactivation, validation, reporting, and atomic compare-and-replace mutation without bulk approval commands.
 - Portable runtime location configuration through `passporttrainer.catalogue.path` and `passporttrainer.assets.root`, with repository-relative development defaults and image containment checks.
 
@@ -170,19 +170,21 @@ Stage 9 verification established that:
 
 Stage 10 verification established that:
 
-- the Stage 5 manifest and metadata remain canonical classification sources, while the header-only Stage 10 review TSV is the sole authoritative human-decision source;
+- the Stage 5 manifest and metadata remain canonical classification sources, while the canonical Stage 10 review TSV is the sole authoritative human-decision source;
 - entity, document, and image verification are independent, document quiz activation is a separate explicit decision, and an enabled record becomes effective only when all Stage 9 predicates hold;
 - target fingerprints use versioned length-prefixed canonical serialization and reject changes to identity, association, document type, image path/content/technical metadata, manifest state, or duplicate representative;
 - review mutations revalidate the current source, compare its checksum, write and force a same-directory temporary file, and require atomic replacement; an enabled dependency cannot be revoked until activation is explicitly disabled;
 - V2 preserves manifest/base status and eligibility separately from effective values, stores decisions and review-source provenance, and migrates V1 without creating implicit approvals;
-- identical production rebuilds produce logical SHA-256 `12c5ca8720b727087ca70e63e4a67746ec9e693352eb205c8969025fe6a69be3`;
-- the checked-in review source contains only its header, the production catalogue contains zero review decisions and zero eligible documents, and Stage 9 still returns `INSUFFICIENT_ELIGIBLE_DATA`;
+- the current reviewed production rebuild has logical SHA-256 `577043d6202c3666eed15ed986173a1df9e28fa566d57e5594b406ccd8a4f936`;
+- the Stage 10A pilot contains 40 explicit decisions: 4 verified entities, 12 verified documents, 12 verified images, and 12 enabled document activations, producing 12 eligible records across 4 countries;
+- the pilot pool contains 4 ordinary, 3 diplomatic, 3 service-passport, and 2 national-ID records; all remaining catalogue records retain their manifest/base provenance and are not implied to be human verified;
+- the Stage 10B real-production smoke passed all four Stage 9 strategies, same-seed determinism, valid different-seed variation, answer validation, and the structured impossible-request failure path;
 - all 145 tests pass without adding a JavaFX review UI or changing the Stage 9 repository/service API.
 
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
-- The production catalogue has zero quiz-eligible documents until explicit review decisions are made; the generator intentionally refuses to fabricate fallback content.
+- Human verification currently covers only the bounded 12-document Stage 10A pilot; the remainder of the 521-record catalogue is not quiz-eligible and must not be described as reviewed.
 - Duplicate suppression uses explicit canonical links and exact SHA-256 equality; visually equivalent re-encodings require a future reviewed data decision.
 - The current read-only catalogue and source assets use configurable filesystem locations; their final Windows installation layout is intentionally deferred to the Windows-release stage.
 - JavaFX smoke tests require a graphical display and validate behavior rather than pixel-perfect screenshots.
@@ -199,7 +201,7 @@ The repeated audit and generated manifest record:
 - 173 physical second-level country/entity directories and 141 normalized source entity names;
 - 139 canonical entity records after explicit alias mergers;
 - 431 unique binary images and 87 exact-duplicate groups, represented by 90 duplicate relationships;
-- 462 `AUTO_CLASSIFIED` and 59 `NEEDS_REVIEW` document records;
+- Stage 5 manifest/base state remains 462 `AUTO_CLASSIFIED` and 59 `NEEDS_REVIEW` document records; Stage 10 effective state separately promotes only the reviewed 12-document pilot;
 - 133 ordinary, 162 diplomatic, 79 service, 146 national-ID, and 1 `UNKNOWN` document-type classifications;
 - inconsistent geography, naming, case, and Unicode retained as source traceability plus versioned correction metadata.
 
@@ -216,4 +218,4 @@ Source files must remain unchanged. SQLite catalogue ingestion consumes the cano
 
 ### Immediate next step
 
-Stage 10 completed review, verification, and quiz-eligibility activation infrastructure without adding any production approvals. Stage 11 learning/training flows are the next planned implementation stage, but meaningful production sessions still require separate, intentional human review decisions because the production pool remains empty. Examination behavior, authentication, statistics, mutable user persistence, and Windows packaging remain later stages.
+Stage 10 implementation and the bounded Stage 10A pilot review are complete. The production quiz pool now contains 12 reviewed records across 4 countries, and Stage 10B proved all four existing Stage 9 strategies against that real pool. Stage 11 learning/training flows remain the next planned implementation stage; the rest of the catalogue remains unreviewed and ineligible. Examination behavior, authentication, statistics, mutable user persistence, and Windows packaging remain later stages.

@@ -416,7 +416,7 @@ class CatalogueUiSmokeTest {
                 assertTrue(mapPane.isFocusTraversable());
                 assertEquals(RESOURCES.getString("map.searchPrompt"), search.getAccessibleText());
                 assertTrue(ukraine.getAccessibleText().contains(
-                        RESOURCES.getString("reviewStatus.AUTO_CLASSIFIED")
+                        RESOURCES.getString("reviewStatus.VERIFIED")
                 ));
 
                 ToggleButton asia = control(mapRoot, "#mapGroup-ASIA", ToggleButton.class);

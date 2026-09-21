@@ -436,7 +436,7 @@ Packaged reference catalogue має відкриватися read-only. Future w
 
 ## 12. Stage 10 review overlay and effective catalogue
 
-Stage 10 не змінює Stage 5 metadata/manifest і не редагує SQLite вручну. Human decisions зберігаються окремо в `data/passport-review/review-decisions.tsv` за stable entity/document/image IDs. Файл має canonical UTF-8/LF representation, exact header, deterministic `(recordType, targetType, targetId)` ordering і наразі містить тільки header: production approvals відсутні.
+Stage 10 не змінює Stage 5 metadata/manifest і не редагує SQLite вручну. Human decisions зберігаються окремо в `data/passport-review/review-decisions.tsv` за stable entity/document/image IDs. Файл має canonical UTF-8/LF representation, exact header та deterministic `(recordType, targetType, targetId)` ordering. Bounded Stage 10A pilot містить 40 explicit records: `VERIFIED` для 4 entities, 12 documents і 12 images та `ENABLED` для тих самих 12 documents. Решта catalogue не є human-verified або quiz-eligible.
 
 `REVIEW` records підтримують `VERIFIED`, `NEEDS_REVIEW`, `EXCLUDED`; `QUIZ_ACTIVATION` records підтримують лише `ENABLED`, `DISABLED` для document. Верифікація entity, document та image незалежна. Verification не активує quiz: effective eligibility потребує explicit `ENABLED`, три effective `VERIFIED` statuses, known document type і canonical document/image.
 
@@ -446,4 +446,6 @@ Stage 10 не змінює Stage 5 metadata/manifest і не редагує SQLi
 
 Rebuild order: validate Stage 5 manifest; parse/canonicalize review source; validate stable targets/fingerprints/activation; apply migrations; transactional manifest import; materialize effective state; copy decisions/provenance; validate reconstructed base plus effective state; commit. Runtime читає тільки read-only SQLite. `PassportRepository.findQuizEligibleCandidates()`, `QuizCandidate` та `QuizGenerationService` не змінені.
 
-Checked-in V2 catalogue має logical SHA-256 `12c5ca8720b727087ca70e63e4a67746ec9e693352eb205c8969025fe6a69be3`, zero review decisions і zero effective quiz-eligible documents. Real activation потребує окремих human-reviewed version-controlled decisions.
+Checked-in V2 catalogue має logical SHA-256 `577043d6202c3666eed15ed986173a1df9e28fa566d57e5594b406ccd8a4f936` і 12 effective quiz-eligible documents across 4 countries. Pilot distribution: 4 `ORDINARY_PASSPORT`, 3 `DIPLOMATIC_PASSPORT`, 3 `SERVICE_PASSPORT`, 2 `NATIONAL_ID`. Stage 5 manifest/base state залишається 462 `AUTO_CLASSIFIED` та 59 `NEEDS_REVIEW`; Stage 10 effective state окремо materialize-ить тільки explicit decisions.
+
+Stage 10B read-only production smoke використав `CatalogueApplicationContext.openReadOnly`, real `SQLitePassportRepository` та unchanged `QuizGenerationService`. `PASSPORT_TO_COUNTRY`, `COUNTRY_TO_PASSPORT`, `DOCUMENT_TYPE` і `FIND_ORDINARY_PASSPORT` успішно згенерували validated questions; same-seed structure був deterministic, different seed дав valid variation, correct/wrong answers пройшли `QuizSession` validation, а impossible scope повернув structured `INSUFFICIENT_ELIGIBLE_DATA`.

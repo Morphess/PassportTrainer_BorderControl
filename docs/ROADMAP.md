@@ -68,7 +68,9 @@ The roadmap preserves the established architecture and product scope. Details re
 
 - **Goal:** preserve Stage 5 classification provenance while requiring explicit, auditable human verification and separate quiz activation.
 - **Primary result:** a version-controlled stable-ID review overlay, strict per-target drift fingerprints, an editorial CLI, and deterministic materialization into the read-only schema-version-2 catalogue.
-- **Delivered:** canonical UTF-8/LF review TSV with atomic replacement; independent entity/document/image decisions; explicit document activation/deactivation; fail-closed stale, duplicate, unresolved, excluded, and noncanonical validation; V1-to-V2 migration without inferred approvals; review provenance in SQLite; unchanged Stage 9 repository/service APIs; and an intentionally empty production review source with zero eligible records.
+- **Delivered:** canonical UTF-8/LF review TSV with atomic replacement; independent entity/document/image decisions; explicit document activation/deactivation; fail-closed stale, duplicate, unresolved, excluded, and noncanonical validation; V1-to-V2 migration without inferred approvals; review provenance in SQLite; and unchanged Stage 9 repository/service APIs.
+- **Stage 10A pilot:** 4 verified entities, 12 verified documents, 12 verified images, and 12 explicit activations produce a deliberately bounded 12-record pool across 4 countries. The remainder of the catalogue is not implied to be reviewed or eligible.
+- **Stage 10B verification:** the real production pool contains 4 ordinary, 3 diplomatic, 3 service-passport, and 2 national-ID records; all four Stage 9 strategies, deterministic replay, valid randomized variation, answer validation, and structured failure behavior pass. Current logical catalogue SHA-256: `577043d6202c3666eed15ed986173a1df9e28fa566d57e5594b406ccd8a4f936`.
 - **Dependencies:** Stage 5 stable identities and classification, Stage 6 deterministic catalogue rebuilds, and Stage 9 fail-closed eligibility.
 
 ## 9. Learning and training modes — Stage 11

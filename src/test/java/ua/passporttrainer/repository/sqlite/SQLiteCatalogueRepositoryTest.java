@@ -11,19 +11,16 @@ import ua.passporttrainer.model.DocumentType;
 import ua.passporttrainer.model.EntityType;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
-import ua.passporttrainer.model.QuizGenerationFailureReason;
-import ua.passporttrainer.model.QuizGenerationRequest;
-import ua.passporttrainer.model.QuizMode;
-import ua.passporttrainer.model.QuizQuestionType;
+import ua.passporttrainer.model.QuizCandidate;
 import ua.passporttrainer.model.ReviewStatus;
-import ua.passporttrainer.service.QuizGenerationException;
 
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
-import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -49,7 +46,7 @@ class SQLiteCatalogueRepositoryTest {
     }
 
     @Test
-    void countryRepositoryReadsCanonicalEntitiesByStableId() {
+    void countryRepositoryReadsCanonicalEntitiesByStableId() throws Exception {
         List<Country> countries = countryRepository.findAll();
         assertEquals(139, countries.size());
         Country ukraine = countries.stream()
@@ -60,7 +57,8 @@ class SQLiteCatalogueRepositoryTest {
         assertTrue(ukraine.id().startsWith("entity:"));
         assertEquals("continent:europe", ukraine.continentId());
         assertEquals(EntityType.COUNTRY, ukraine.entityType());
-        assertEquals(ReviewStatus.AUTO_CLASSIFIED, ukraine.reviewStatus());
+        assertEquals(ReviewStatus.VERIFIED, ukraine.reviewStatus());
+        assertEquals(ReviewStatus.AUTO_CLASSIFIED, manifestReviewStatus("entities", ukraine.id()));
         assertEquals(passportRepository.findByCountryId(ukraine.id()).size(), ukraine.documentCount());
         assertEquals(ukraine, countryRepository.findById(ukraine.id()).orElseThrow());
         assertTrue(countryRepository.findByIsoAlpha2("UA").isEmpty());
@@ -79,7 +77,7 @@ class SQLiteCatalogueRepositoryTest {
     }
 
     @Test
-    void passportRepositoryMapsDocumentsAndImagesByStableIds() {
+    void passportRepositoryMapsDocumentsAndImagesByStableIds() throws Exception {
         Country ukraine = countryRepository.findAll().stream()
                 .filter(country -> country.displayName().equals("Україна"))
                 .findFirst()
@@ -90,7 +88,8 @@ class SQLiteCatalogueRepositoryTest {
         PassportDocument document = documents.getFirst();
         assertTrue(document.id().startsWith("document:"));
         assertEquals(ukraine.id(), document.countryId());
-        assertEquals(ReviewStatus.AUTO_CLASSIFIED, document.reviewStatus());
+        assertEquals(ReviewStatus.VERIFIED, document.reviewStatus());
+        assertEquals(ReviewStatus.AUTO_CLASSIFIED, manifestReviewStatus("documents", document.id()));
         assertEquals(1, document.imageCount());
         assertEquals(document, passportRepository.findById(document.id()).orElseThrow());
 
@@ -125,32 +124,36 @@ class SQLiteCatalogueRepositoryTest {
     }
 
     @Test
-    void productionCatalogueZeroPoolIsRefusedWithoutFallbackContent() throws Exception {
-        assertTrue(passportRepository.findQuizEligibleCandidates().isEmpty());
-        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(databasePath);
-        QuizGenerationRequest request = new QuizGenerationRequest(
-                1,
-                1,
-                QuizMode.TRAINING,
-                1,
-                2,
-                Set.of(QuizQuestionType.DOCUMENT_TYPE),
-                Set.of(),
-                Set.of(),
-                Set.of(),
-                1L
-        );
+    void productionCatalogueExposesReviewedCanonicalCandidatePool() {
+        List<QuizCandidate> candidates = passportRepository.findQuizEligibleCandidates();
 
-        QuizGenerationException exception = assertThrows(
-                QuizGenerationException.class,
-                () -> context.quizGenerationService().generate(request)
-        );
-
-        assertEquals(
-                QuizGenerationFailureReason.INSUFFICIENT_ELIGIBLE_DATA,
-                exception.reason()
-        );
-        assertEquals(0, exception.availableCandidateCount());
+        assertEquals(12, candidates.size());
+        assertEquals(4, candidates.stream().map(QuizCandidate::entityId).distinct().count());
+        assertEquals(4, candidates.stream()
+                .filter(candidate -> candidate.documentType() == DocumentType.ORDINARY_PASSPORT).count());
+        assertEquals(3, candidates.stream()
+                .filter(candidate -> candidate.documentType() == DocumentType.DIPLOMATIC_PASSPORT).count());
+        assertEquals(3, candidates.stream()
+                .filter(candidate -> candidate.documentType() == DocumentType.SERVICE_PASSPORT).count());
+        assertEquals(2, candidates.stream()
+                .filter(candidate -> candidate.documentType() == DocumentType.NATIONAL_ID).count());
+        assertEquals(12, candidates.stream().map(QuizCandidate::documentId).distinct().count());
+        assertEquals(12, candidates.stream().map(QuizCandidate::imageId).distinct().count());
+        assertEquals(12, candidates.stream().map(QuizCandidate::imageSha256).distinct().count());
+        assertTrue(candidates.stream().allMatch(QuizCandidate::quizEligible));
+        assertTrue(candidates.stream().allMatch(candidate ->
+                candidate.entityReviewStatus() == ReviewStatus.VERIFIED
+                        && candidate.documentReviewStatus() == ReviewStatus.VERIFIED
+                        && candidate.imageReviewStatus() == ReviewStatus.VERIFIED
+        ));
+        assertTrue(candidates.stream().noneMatch(candidate ->
+                candidate.documentType() == DocumentType.UNKNOWN
+        ));
+        assertTrue(candidates.stream().allMatch(candidate ->
+                candidate.documentId().equals(candidate.canonicalDocumentId())
+                        && candidate.imageId().equals(candidate.canonicalImageId())
+                        && candidate.usable()
+        ));
     }
 
     @Test
@@ -170,4 +173,18 @@ class SQLiteCatalogueRepositoryTest {
             assertThrows(SQLException.class, () -> statement.executeUpdate("DELETE FROM documents"));
         }
     }
+
+    private ReviewStatus manifestReviewStatus(String table, String id) throws Exception {
+        try (Connection connection = provider.getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "SELECT manifest_review_status FROM " + table + " WHERE id = ?"
+             )) {
+            statement.setString(1, id);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                assertTrue(resultSet.next());
+                return ReviewStatus.valueOf(resultSet.getString(1));
+            }
+        }
+    }
+
 }

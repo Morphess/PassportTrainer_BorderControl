@@ -21,13 +21,26 @@ class ReviewDecisionSourceTest {
     Path temporaryDirectory;
 
     @Test
-    void checkedInSourceIsCanonicalHeaderOnlyUtf8() throws Exception {
+    void checkedInSourceIsCanonicalUtf8WithReviewedPilotDecisions() throws Exception {
         Path path = Path.of("data", "passport-review", ReviewDecisionSource.FILE_NAME);
         ReviewDecisionSource source = ReviewDecisionSource.read(path);
+        byte[] bytes = Files.readAllBytes(path);
+        String text = new String(bytes, StandardCharsets.UTF_8);
 
-        assertTrue(source.records().isEmpty());
-        assertArrayEquals((ReviewDecisionSource.HEADER + "\n").getBytes(StandardCharsets.UTF_8),
-                Files.readAllBytes(path));
+        assertArrayEquals(source.canonicalBytes(), bytes);
+        assertTrue(text.startsWith(ReviewDecisionSource.HEADER + "\n"));
+        assertTrue(text.endsWith("\n"));
+        assertFalse(text.startsWith("\ufeff"));
+        assertFalse(text.contains("\r"));
+        assertEquals(40, source.records().size());
+        assertEquals(4, count(source, ReviewDecisionSource.RecordType.REVIEW,
+                ReviewDecisionSource.TargetType.ENTITY, ReviewDecisionSource.Decision.VERIFIED));
+        assertEquals(12, count(source, ReviewDecisionSource.RecordType.REVIEW,
+                ReviewDecisionSource.TargetType.DOCUMENT, ReviewDecisionSource.Decision.VERIFIED));
+        assertEquals(12, count(source, ReviewDecisionSource.RecordType.REVIEW,
+                ReviewDecisionSource.TargetType.IMAGE, ReviewDecisionSource.Decision.VERIFIED));
+        assertEquals(12, count(source, ReviewDecisionSource.RecordType.QUIZ_ACTIVATION,
+                ReviewDecisionSource.TargetType.DOCUMENT, ReviewDecisionSource.Decision.ENABLED));
     }
 
     @Test
@@ -151,6 +164,19 @@ class ReviewDecisionSourceTest {
                 ReviewTestSupport.verifiedSource(ReviewTestSupport.fixture(), false)
         ));
         assertArrayEquals(current.canonicalBytes(), Files.readAllBytes(path));
+    }
+
+    private static long count(
+            ReviewDecisionSource source,
+            ReviewDecisionSource.RecordType recordType,
+            ReviewDecisionSource.TargetType targetType,
+            ReviewDecisionSource.Decision decision
+    ) {
+        return source.records().stream()
+                .filter(record -> record.recordType() == recordType)
+                .filter(record -> record.targetType() == targetType)
+                .filter(record -> record.decision() == decision)
+                .count();
     }
 
     private static void assertReason(ReviewFailureReason reason, ThrowingOperation operation) {
