@@ -32,6 +32,8 @@ public final class StartController {
     private Button catalogueButton;
     @FXML
     private Button mapButton;
+    @FXML
+    private Button modeSelectionButton;
 
 
     public StartController(
@@ -52,7 +54,9 @@ public final class StartController {
         Objects.requireNonNull(statusLabel, "statusLabel was not injected");
         Objects.requireNonNull(mapStatusLabel, "mapStatusLabel was not injected");
         Objects.requireNonNull(catalogueButton, "catalogueButton was not injected");
+        Objects.requireNonNull(modeSelectionButton, "modeSelectionButton was not injected");
         Objects.requireNonNull(mapButton, "mapButton was not injected");
+        modeSelectionButton.setDisable(!catalogueAvailable);
         catalogueButton.setDisable(!catalogueAvailable);
         mapButton.setDisable(!mapAvailable);
         statusLabel.setText(resources.getString(
@@ -68,6 +72,13 @@ public final class StartController {
             mapStatusLabel.getStyleClass().add("error-label");
         }
     }
+    @FXML
+    private void openModeSelection() {
+        if (catalogueAvailable) {
+            navigationService.show(View.MODE_SELECTION);
+        }
+    }
+
     @FXML
     private void openWorldMap() {
         if (mapAvailable) {

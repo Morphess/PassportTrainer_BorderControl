@@ -5,6 +5,9 @@ package ua.passporttrainer.navigation;
  */
 public enum View {
     START("/fxml/start-view.fxml"),
+    MODE_SELECTION("/fxml/mode-selection-view.fxml"),
+    LEARNING_ENTITIES("/fxml/learning-entity-selection-view.fxml"),
+    LEARNING_BROWSER("/fxml/learning-browser-view.fxml"),
     CATALOGUE("/fxml/catalogue-view.fxml"),
     WORLD_MAP("/fxml/world-map-view.fxml"),
     PASSPORTS("/fxml/passport-list-view.fxml"),

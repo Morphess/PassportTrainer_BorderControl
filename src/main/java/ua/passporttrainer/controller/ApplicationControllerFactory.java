@@ -101,6 +101,19 @@ public final class ApplicationControllerFactory implements NavigationControllerF
                     navigationService, context.continentService(), context.countryService(), resources
             );
         }
+        if (controllerType == ModeSelectionController.class) {
+            return new ModeSelectionController(navigationService);
+        }
+        if (controllerType == LearningEntitySelectionController.class) {
+            return new LearningEntitySelectionController(
+                    navigationService, context.learningService(), resources
+            );
+        }
+        if (controllerType == LearningBrowserController.class) {
+            return new LearningBrowserController(
+                    navigationService, context.learningService(), imageLocator, resources
+            );
+        }
         if (controllerType == WorldMapController.class) {
             requireMap();
             return new WorldMapController(

@@ -11,6 +11,7 @@ import ua.passporttrainer.repository.sqlite.SQLitePassportRepository;
 import ua.passporttrainer.service.ContinentService;
 import ua.passporttrainer.service.CountryService;
 import ua.passporttrainer.service.PassportService;
+import ua.passporttrainer.service.LearningService;
 import ua.passporttrainer.service.QuizGenerationService;
 
 import java.time.Clock;
@@ -24,6 +25,7 @@ public record CatalogueApplicationContext(
         ContinentService continentService,
         CountryService countryService,
         PassportService passportService,
+        LearningService learningService,
         QuizGenerationService quizGenerationService
 ) {
 
@@ -31,6 +33,7 @@ public record CatalogueApplicationContext(
         Objects.requireNonNull(continentService, "continentService");
         Objects.requireNonNull(countryService, "countryService");
         Objects.requireNonNull(passportService, "passportService");
+        Objects.requireNonNull(learningService, "learningService");
         Objects.requireNonNull(quizGenerationService, "quizGenerationService");
     }
 
@@ -52,6 +55,7 @@ public record CatalogueApplicationContext(
                 new ContinentService(continentRepository),
                 new CountryService(countryRepository),
                 new PassportService(passportRepository),
+                new LearningService(passportRepository),
                 new QuizGenerationService(passportRepository, Clock.systemUTC())
         );
     }

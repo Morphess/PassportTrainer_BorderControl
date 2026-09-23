@@ -27,6 +27,7 @@ import org.junit.jupiter.api.io.TempDir;
 import ua.passporttrainer.CatalogueTestSupport;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
 import ua.passporttrainer.controller.ApplicationControllerFactory;
+import ua.passporttrainer.controller.LearningBrowserController;
 import ua.passporttrainer.controller.PassportDetailsController;
 import ua.passporttrainer.controller.PassportListController;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
@@ -35,6 +36,7 @@ import ua.passporttrainer.model.Country;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
 import ua.passporttrainer.model.QuizCandidate;
+import ua.passporttrainer.presentation.LearningEntityPresentation;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.repository.PassportRepository;
@@ -43,6 +45,7 @@ import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.QuizSessionLifecycleService;
 
 import java.nio.file.Path;
+import java.text.MessageFormat;
 import java.text.Normalizer;
 import java.time.Clock;
 import java.time.Instant;
@@ -337,6 +340,7 @@ class CatalogueUiSmokeTest {
                 baseContext.continentService(),
                 baseContext.countryService(),
                 passportService,
+                baseContext.learningService(),
                 baseContext.quizGenerationService()
         );
 
@@ -661,6 +665,7 @@ class CatalogueUiSmokeTest {
 
                 Parent root = stage.getScene().getRoot();
                 assertTrue(control(root, "#catalogueButton", Button.class).isDisabled());
+                assertTrue(control(root, "#modeSelectionButton", Button.class).isDisabled());
                 assertTrue(control(root, "#mapButton", Button.class).isDisabled());
                 assertEquals(
                         RESOURCES.getString("error.catalogueUnavailable"),
@@ -669,6 +674,147 @@ class CatalogueUiSmokeTest {
                 assertEquals(
                         RESOURCES.getString("error.mapUnavailable"),
                         control(root, "#mapStatusLabel", Label.class).getText()
+                );
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void completesNonScoredLearningFlowAndPreservesNavigation() throws Exception {
+        Path database = temporaryDirectory.resolve("learning-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
+                        context,
+                        coordinator,
+                        new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        RESOURCES
+                );
+                NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+                navigation.show(View.START);
+                stage.show();
+
+                Parent startRoot = stage.getScene().getRoot();
+                Button modeSelectionButton = control(startRoot, "#modeSelectionButton", Button.class);
+                assertFalse(modeSelectionButton.isDisabled());
+                modeSelectionButton.fire();
+
+                Parent modeRoot = stage.getScene().getRoot();
+                assertFalse(control(modeRoot, "#learningButton", Button.class).isDisabled());
+                assertTrue(control(modeRoot, "#trainingButton", Button.class).isDisabled());
+                assertTrue(control(modeRoot, "#examinationButton", Button.class).isDisabled());
+                control(modeRoot, "#learningButton", Button.class).fire();
+
+                Parent selectionRoot = stage.getScene().getRoot();
+                ListView<?> entityList = control(selectionRoot, "#entityList", ListView.class);
+                assertEquals(4, entityList.getItems().size());
+                LearningEntityPresentation ukraine = entityList.getItems().stream()
+                        .map(LearningEntityPresentation.class::cast)
+                        .filter(entity -> entity.displayName().equals("Україна"))
+                        .findFirst()
+                        .orElseThrow();
+                entityList.getSelectionModel().select(entityList.getItems().indexOf(ukraine));
+                control(selectionRoot, "#openButton", Button.class).fire();
+
+                Parent learningRoot = stage.getScene().getRoot();
+                assertEquals("Україна", control(learningRoot, "#headingLabel", Label.class).getText());
+                assertEquals(
+                        MessageFormat.format(RESOURCES.getString("learning.documentCounter"), 1, 4),
+                        control(learningRoot, "#documentCounterLabel", Label.class).getText()
+                );
+                Label documentType = control(learningRoot, "#documentTypeLabel", Label.class);
+                assertFalse(documentType.getText().contains("_"));
+                assertNotNull(control(learningRoot, "#passportImageView", ImageView.class).getImage());
+                Button previous = control(learningRoot, "#previousButton", Button.class);
+                Button next = control(learningRoot, "#nextButton", Button.class);
+                assertTrue(previous.isDisabled());
+                previous.fire();
+                assertFalse(next.isDisabled());
+                next.fire();
+                assertEquals(
+                        MessageFormat.format(RESOURCES.getString("learning.documentCounter"), 2, 4),
+                        control(learningRoot, "#documentCounterLabel", Label.class).getText()
+                );
+                assertFalse(previous.isDisabled());
+                previous.fire();
+                assertEquals(
+                        MessageFormat.format(RESOURCES.getString("learning.documentCounter"), 1, 4),
+                        control(learningRoot, "#documentCounterLabel", Label.class).getText()
+                );
+                while (!next.isDisabled()) {
+                    next.fire();
+                }
+                String finalCounter = control(learningRoot, "#documentCounterLabel", Label.class).getText();
+                assertEquals(
+                        MessageFormat.format(RESOURCES.getString("learning.documentCounter"), 4, 4),
+                        finalCounter
+                );
+                next.fire();
+                assertEquals(finalCounter, control(
+                        learningRoot, "#documentCounterLabel", Label.class
+                ).getText());
+                assertTrue(coordinator.lifecycle().isEmpty());
+
+                control(learningRoot, "#backButton", Button.class).fire();
+                assertSame(selectionRoot, stage.getScene().getRoot());
+                control(selectionRoot, "#backButton", Button.class).fire();
+                assertSame(modeRoot, stage.getScene().getRoot());
+                control(modeRoot, "#backButton", Button.class).fire();
+                assertSame(startRoot, stage.getScene().getRoot());
+                assertTrue(coordinator.lifecycle().isEmpty());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void learningKeepsNavigationAvailableWhenAnImageIsMissing() throws Exception {
+        Path database = temporaryDirectory.resolve("learning-missing-image.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        String ukraineId = context.learningService().findEligibleEntities().stream()
+                .filter(entity -> entity.displayName().equals("Україна"))
+                .map(LearningEntityPresentation::entityId)
+                .findFirst()
+                .orElseThrow();
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                NavigationService navigation = new NavigationService(
+                        stage,
+                        RESOURCES,
+                        ApplicationControllerFactory.available(
+                                context,
+                                sessionCoordinator(context),
+                                new FileSystemPassportImageLocator(temporaryDirectory),
+                                RESOURCES
+                        )
+                );
+                navigation.show(
+                        View.LEARNING_BROWSER,
+                        LearningBrowserController.class,
+                        controller -> controller.showEntity(ukraineId)
+                );
+
+                Parent root = stage.getScene().getRoot();
+                assertEquals(
+                        RESOURCES.getString("error.imageMissing"),
+                        control(root, "#errorLabel", Label.class).getText()
+                );
+                assertFalse(control(root, "#nextButton", Button.class).isDisabled());
+                control(root, "#nextButton", Button.class).fire();
+                assertEquals(
+                        RESOURCES.getString("error.imageMissing"),
+                        control(root, "#errorLabel", Label.class).getText()
                 );
             } finally {
                 stage.close();

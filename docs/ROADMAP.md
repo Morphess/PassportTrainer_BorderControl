@@ -75,10 +75,11 @@ The roadmap preserves the established architecture and product scope. Details re
 
 ## 9. Learning and training modes — Stage 11
 
-- **Status:** In progress; shared Stage 11B infrastructure completed.
+- **Status:** In progress; shared Stage 11B infrastructure and Stage 11C Learning Mode completed.
 - **Goal:** provide the required learning and training experiences using the shared quiz engine.
 - **Primary result:** distinct learning and training flows with behavior appropriate to each existing product mode.
 - **Delivered in Stage 11B:** JavaFX-independent accepted configuration and `CREATED → ACTIVE → COMPLETED` coordination; lifecycle/result-persistence separation; complete-answer completion invariant; injected anonymous identity/session ID/seed boundaries; mode-safe feedback policy; `NavigationService.replace`/`resetTo`; and the single renamed `ApplicationControllerFactory`. No mode UI or persistence was introduced.
+- **Delivered in Stage 11C:** a non-scored Learning flow from mode selection through an eligible-country list into a safe passport browser; the JavaFX-independent `LearningService` reuses the authoritative quiz-candidate query and presents only canonical verified eligible material. Training remains Stage 11D and Examination remains Stage 12.
 - **Dependencies:** the completed Stage 9 quiz engine, Stage 10 reviewed-catalogue infrastructure, and Stage 7 catalogue UI foundations.
 
 ## 10. Examination mode — Stage 12
