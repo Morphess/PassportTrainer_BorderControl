@@ -43,6 +43,44 @@ public final class NavigationService {
     }
 
     public <T> void show(View view, Class<T> controllerType, Consumer<T> initializer) {
+        setRoot(loadRoot(view, controllerType, initializer), true);
+    }
+
+    public void replace(View view) {
+        replace(view, Object.class, ignored -> {
+        });
+    }
+
+    public <T> void replace(View view, Class<T> controllerType, Consumer<T> initializer) {
+        setRoot(loadRoot(view, controllerType, initializer), false);
+    }
+
+    public void resetTo(View view) {
+        resetTo(view, Object.class, ignored -> {
+        });
+    }
+
+    public <T> void resetTo(View view, Class<T> controllerType, Consumer<T> initializer) {
+        Parent root = loadRoot(view, controllerType, initializer);
+        history.clear();
+        setRoot(root, false);
+    }
+
+    public boolean canGoBack() {
+        return !history.isEmpty();
+    }
+
+    public void goBack() {
+        if (!history.isEmpty()) {
+            setRoot(history.pop(), false);
+        }
+    }
+
+    private <T> Parent loadRoot(
+            View view,
+            Class<T> controllerType,
+            Consumer<T> initializer
+    ) {
         Objects.requireNonNull(view, "view");
         Objects.requireNonNull(controllerType, "controllerType");
         Objects.requireNonNull(initializer, "initializer");
@@ -61,19 +99,9 @@ public final class NavigationService {
                 );
             }
             initializer.accept(controllerType.cast(controller));
-            setRoot(root, true);
+            return root;
         } catch (IOException exception) {
             throw new NavigationException("Cannot load view: " + view, exception);
-        }
-    }
-
-    public boolean canGoBack() {
-        return !history.isEmpty();
-    }
-
-    public void goBack() {
-        if (!history.isEmpty()) {
-            setRoot(history.pop(), false);
         }
     }
 

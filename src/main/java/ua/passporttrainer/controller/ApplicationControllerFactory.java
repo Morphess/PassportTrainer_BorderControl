@@ -8,14 +8,16 @@ import ua.passporttrainer.map.WorldMapValidator;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.navigation.NavigationControllerFactory;
 import ua.passporttrainer.navigation.NavigationService;
+import ua.passporttrainer.service.QuizSessionCoordinator;
 
 import java.util.Objects;
 import java.util.ResourceBundle;
 
 /** Creates only the application's explicitly supported FXML controllers. */
-public final class CatalogueControllerFactory implements NavigationControllerFactory {
+public final class ApplicationControllerFactory implements NavigationControllerFactory {
 
     private final CatalogueApplicationContext catalogueContext;
+    private final QuizSessionCoordinator sessionCoordinator;
     private final Throwable catalogueFailure;
     private final WorldMapDefinition mapDefinition;
     private final ResourceBundle regionLabels;
@@ -23,8 +25,9 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
     private final PassportImageLocator imageLocator;
     private final ResourceBundle resources;
 
-    private CatalogueControllerFactory(
+    private ApplicationControllerFactory(
             CatalogueApplicationContext catalogueContext,
+            QuizSessionCoordinator sessionCoordinator,
             Throwable catalogueFailure,
             WorldMapDefinition mapDefinition,
             ResourceBundle regionLabels,
@@ -33,6 +36,7 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
             ResourceBundle resources
     ) {
         this.catalogueContext = catalogueContext;
+        this.sessionCoordinator = sessionCoordinator;
         this.catalogueFailure = catalogueFailure;
         this.mapDefinition = mapDefinition;
         this.regionLabels = regionLabels;
@@ -41,12 +45,14 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
         this.resources = Objects.requireNonNull(resources, "resources");
     }
 
-    public static CatalogueControllerFactory available(
+    public static ApplicationControllerFactory available(
             CatalogueApplicationContext catalogueContext,
+            QuizSessionCoordinator sessionCoordinator,
             PassportImageLocator imageLocator,
             ResourceBundle resources
     ) {
         Objects.requireNonNull(catalogueContext, "catalogueContext");
+        Objects.requireNonNull(sessionCoordinator, "sessionCoordinator");
         WorldMapDefinition mapDefinition = null;
         ResourceBundle regionLabels = null;
         Throwable mapFailure = null;
@@ -63,19 +69,20 @@ public final class CatalogueControllerFactory implements NavigationControllerFac
         } catch (RuntimeException exception) {
             mapFailure = exception;
         }
-        return new CatalogueControllerFactory(
-                catalogueContext, null, mapDefinition, regionLabels, mapFailure, imageLocator, resources
+        return new ApplicationControllerFactory(
+                catalogueContext, sessionCoordinator, null,
+                mapDefinition, regionLabels, mapFailure, imageLocator, resources
         );
     }
 
-    public static CatalogueControllerFactory unavailable(
+    public static ApplicationControllerFactory unavailable(
             Throwable catalogueFailure,
             PassportImageLocator imageLocator,
             ResourceBundle resources
     ) {
         Throwable failure = Objects.requireNonNull(catalogueFailure, "catalogueFailure");
-        return new CatalogueControllerFactory(
-                null, failure, null, null, failure, imageLocator, resources
+        return new ApplicationControllerFactory(
+                null, null, failure, null, null, failure, imageLocator, resources
         );
     }
 

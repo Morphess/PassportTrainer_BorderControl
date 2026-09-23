@@ -26,7 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import ua.passporttrainer.CatalogueTestSupport;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
-import ua.passporttrainer.controller.CatalogueControllerFactory;
+import ua.passporttrainer.controller.ApplicationControllerFactory;
 import ua.passporttrainer.controller.PassportDetailsController;
 import ua.passporttrainer.controller.PassportListController;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
@@ -39,9 +39,14 @@ import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.repository.PassportRepository;
 import ua.passporttrainer.service.PassportService;
+import ua.passporttrainer.service.QuizSessionCoordinator;
+import ua.passporttrainer.service.QuizSessionLifecycleService;
 
-import java.text.Normalizer;
 import java.nio.file.Path;
+import java.text.Normalizer;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.sql.SQLException;
 import java.util.Enumeration;
 import java.util.List;
@@ -97,8 +102,9 @@ class CatalogueUiSmokeTest {
         onFxThread(() -> {
             Stage stage = new Stage();
             try {
-                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
+                        sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         RESOURCES
                 );
@@ -191,8 +197,9 @@ class CatalogueUiSmokeTest {
         onFxThread(() -> {
             Stage stage = new Stage();
             try {
-                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
+                        sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         RESOURCES
                 );
@@ -247,8 +254,9 @@ class CatalogueUiSmokeTest {
         onFxThread(() -> {
             Stage stage = new Stage();
             try {
-                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
+                        sessionCoordinator(context),
                         new FileSystemPassportImageLocator(emptyAssetRoot),
                         RESOURCES
                 );
@@ -335,8 +343,9 @@ class CatalogueUiSmokeTest {
         onFxThread(() -> {
             Stage stage = new Stage();
             try {
-                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
+                        sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         RESOURCES
                 );
@@ -387,8 +396,9 @@ class CatalogueUiSmokeTest {
         onFxThread(() -> {
             Stage stage = new Stage();
             try {
-                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
+                        sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         RESOURCES
                 );
@@ -487,8 +497,9 @@ class CatalogueUiSmokeTest {
         onFxThread(() -> {
             Stage stage = new Stage();
             try {
-                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
+                        sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         RESOURCES
                 );
@@ -607,8 +618,9 @@ class CatalogueUiSmokeTest {
         onFxThread(() -> {
             Stage stage = new Stage();
             try {
-                CatalogueControllerFactory factory = CatalogueControllerFactory.available(
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
+                        sessionCoordinator(context),
                         new FileSystemPassportImageLocator(temporaryDirectory),
                         resourcesWithoutMapGroupLabel()
                 );
@@ -639,7 +651,7 @@ class CatalogueUiSmokeTest {
         onFxThread(() -> {
             Stage stage = new Stage();
             try {
-                CatalogueControllerFactory factory = CatalogueControllerFactory.unavailable(
+                ApplicationControllerFactory factory = ApplicationControllerFactory.unavailable(
                         new SQLException("catalogue fixture unavailable"),
                         new FileSystemPassportImageLocator(temporaryDirectory),
                         RESOURCES
@@ -662,6 +674,118 @@ class CatalogueUiSmokeTest {
                 stage.close();
             }
         });
+    }
+
+    @Test
+    void showPreservesExistingBackStackBehavior() throws Exception {
+        Path database = temporaryDirectory.resolve("navigation-show.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                NavigationService navigation = new NavigationService(
+                        stage,
+                        RESOURCES,
+                        ApplicationControllerFactory.available(
+                                context,
+                                sessionCoordinator(context),
+                                new FileSystemPassportImageLocator(temporaryDirectory),
+                                RESOURCES
+                        )
+                );
+                navigation.show(View.START);
+                Parent startRoot = stage.getScene().getRoot();
+                navigation.show(View.CATALOGUE);
+
+                assertTrue(navigation.canGoBack());
+                navigation.goBack();
+                assertSame(startRoot, stage.getScene().getRoot());
+                assertFalse(navigation.canGoBack());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void replaceDoesNotAddTheReplacedRootToHistory() throws Exception {
+        Path database = temporaryDirectory.resolve("navigation-replace.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                NavigationService navigation = new NavigationService(
+                        stage,
+                        RESOURCES,
+                        ApplicationControllerFactory.available(
+                                context,
+                                sessionCoordinator(context),
+                                new FileSystemPassportImageLocator(temporaryDirectory),
+                                RESOURCES
+                        )
+                );
+                navigation.show(View.START);
+                Parent startRoot = stage.getScene().getRoot();
+                navigation.show(View.CATALOGUE);
+                Parent catalogueRoot = stage.getScene().getRoot();
+
+                navigation.replace(View.WORLD_MAP);
+
+                assertNotSame(catalogueRoot, stage.getScene().getRoot());
+                assertTrue(navigation.canGoBack());
+                navigation.goBack();
+                assertSame(startRoot, stage.getScene().getRoot());
+                assertFalse(navigation.canGoBack());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void resetToClearsNavigationHistory() throws Exception {
+        Path database = temporaryDirectory.resolve("navigation-reset.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                NavigationService navigation = new NavigationService(
+                        stage,
+                        RESOURCES,
+                        ApplicationControllerFactory.available(
+                                context,
+                                sessionCoordinator(context),
+                                new FileSystemPassportImageLocator(temporaryDirectory),
+                                RESOURCES
+                        )
+                );
+                navigation.show(View.START);
+                navigation.show(View.CATALOGUE);
+                navigation.resetTo(View.START);
+                Parent resetRoot = stage.getScene().getRoot();
+
+                assertFalse(navigation.canGoBack());
+                navigation.goBack();
+                assertSame(resetRoot, stage.getScene().getRoot());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    private static QuizSessionCoordinator sessionCoordinator(CatalogueApplicationContext context) {
+        return new QuizSessionCoordinator(
+                context.quizGenerationService(),
+                new QuizSessionLifecycleService(Clock.fixed(Instant.EPOCH, ZoneOffset.UTC)),
+                () -> 1L,
+                () -> 1L
+        );
     }
 
     private static ResourceBundle resourcesWithoutMapGroupLabel() {

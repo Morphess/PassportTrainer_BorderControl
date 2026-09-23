@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after Stage 10. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after Stage 11B. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -25,16 +25,18 @@ This document records the repository state after Stage 10. It distinguishes impl
 - A reproducibly generated Natural Earth 5.1.1 Ukraine-POV Robinson SVG with 249 unique `ADM0_A3` region IDs, pinned source/output hashes, retained public-domain notice, and a pinned `mapshaper@0.7.61` generation tool that validates staged output before atomic replacement.
 - Strict map resource loading and validation covering 249 geometry records, 135 explicit canonical links, 114 intentionally unlinked geographic regions, and 4 list-only entities so that all 139 canonical entities remain reachable without runtime name matching.
 - Native JavaFX map interaction with six presentation groups over the seven canonical continents, dateline-aware Australia/Oceania focus, hover/review/no-data/selection states, bounded zoom and pan, reset, keyboard activation, Unicode fallback search, and localized accessible labels and tooltips.
-- Central FXML loading, constructor-injected controller creation, scene-root replacement, shared CSS, and instance-local navigation history through `NavigationService`.
-- JDK-only domain records and enums for countries, passports, users, quiz sessions, answers, results, typed quiz content, quiz-generation requests, and structured generation failures; catalogue and quiz identities use stable Stage 5 text IDs, while presentation labels remain separate.
+- Central FXML loading, constructor-injected controller creation, scene-root replacement, shared CSS, instance-local navigation history, root replacement without history growth, and history-reset navigation through `NavigationService`.
+- JDK-only domain records and enums for countries, passports, users, quiz sessions, accepted session configuration, explicit session lifecycle, answers, results, typed quiz content, quiz-generation requests, and structured generation failures; catalogue and quiz identities use stable Stage 5 text IDs, while presentation labels remain separate.
 - The authoritative `DocumentType` contract is `ORDINARY_PASSPORT`, `DIPLOMATIC_PASSPORT`, `SERVICE_PASSPORT`, `NATIONAL_ID`, and `UNKNOWN`.
 - The authoritative `QuizQuestionType` contract is `PASSPORT_TO_COUNTRY`, `COUNTRY_TO_PASSPORT`, `DOCUMENT_TYPE`, and `FIND_ORDINARY_PASSPORT`.
 - Repository interfaces for continents, countries, passports, users, results, and settings; `PassportRepository` includes one bounded quiz-candidate read.
 - Service-layer classes using constructor injection, including catalogue browsing by canonical continent membership.
 - `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
-- In-memory quiz-session lifecycle with typed validated questions, unique question IDs and answer-option IDs, one answer per question, immutable completion, bounded scores, and examination-only result-save delegation.
+- Separate in-memory quiz-session lifecycle and examination-result boundaries: `QuizSessionLifecycleService` depends only on `Clock`, determines correctness, rejects duplicate/post-completion answers and early completion, while `ExamResultService` alone depends on `ResultRepository`.
 - `QuizGenerationService`, which filters canonical verified eligible candidates, applies canonical continent/entity/document-type scopes, builds all four supported question types, selects semantic distractors, shuffles through one injectable seeded random source, prevents repeated correct documents/images, and returns only fully populated `QuizSession` instances.
-- One hundred forty-five JUnit tests, including isolated SQLite integration, review-source canonicalization and atomic-write safety, target-fingerprint sensitivity and drift rejection, disallowed activation targeting, V1-to-V2 migration safety, review materialization, unchanged Stage 9 integration, reviewed production candidate-pool invariants, quiz-generation determinism/invariants/failures, isolated zero-pool failure behavior, Unicode search, map integrity/completeness, high-risk geopolitical mappings, dateline-wrapped viewport and interaction behavior, independent map-failure fallback, FXML loading, complete map/catalogue navigation, portable image resolution, real image decoding, and multi-image paging.
+- An application-scoped, JavaFX-independent `QuizSessionCoordinator` with immutable accepted configuration, explicit `CREATED → ACTIVE → COMPLETED` state, one generation call per start, current-question progression, derived progress/score, mode-safe answer feedback, typed generation-failure preservation, deterministic injected ID/seed suppliers, restart, and non-persisted abandonment.
+- A minimal `QuizModePolicy` that exposes immediate correctness and active score only for Training while allowing future Examination submission results to omit correctness.
+- One hundred sixty-three JUnit tests, including isolated SQLite integration, review-source canonicalization and atomic-write safety, target-fingerprint sensitivity and drift rejection, disallowed activation targeting, V1-to-V2 migration safety, review materialization, unchanged Stage 9 integration, reviewed production candidate-pool invariants, quiz-generation determinism/invariants/failures, session lifecycle/coordinator/domain invariants, navigation replacement/reset behavior, isolated zero-pool failure behavior, Unicode search, map integrity/completeness, high-risk geopolitical mappings, dateline-wrapped viewport and interaction behavior, independent map-failure fallback, FXML loading, complete map/catalogue navigation, portable image resolution, real image decoding, and multi-image paging.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
@@ -52,8 +54,8 @@ This document records the repository state after Stage 10. It distinguishes impl
 
 - The catalogue UI browses every current record and displays effective review state; human review editing and quiz activation are intentionally confined to developer/editorial CLI tooling rather than the student-facing JavaFX application.
 - Versioned SQLite schema creation and deterministic manifest ingestion are implemented; Windows packaging of the read-only catalogue and passport assets remains a later release concern.
-- Quiz generation is implemented independently of JavaFX, but no screen starts or presents a generated session and no mode-specific learning, training, or examination rules exist.
-- Learning, training, and examination are represented by `QuizMode`; generation preserves the requested mode without differentiating its behavior.
+- Quiz generation and the shared session infrastructure are implemented independently of JavaFX, but no screen starts or presents a generated session.
+- Learning, Training, and Examination disclosure behavior is represented by `QuizModePolicy`; complete mode-specific UI workflows are not implemented.
 - Authentication, settings, and statistics have service and repository boundaries but no persistence implementations or UI flows.
 - Localization infrastructure covers the implemented catalogue and interactive-map flows in the default resource bundles; additional locales are not present.
 
@@ -81,8 +83,8 @@ JavaFX View (FXML/CSS)
 - Repository interfaces isolate services from persistence technology.
 - `database` contains JDBC connection infrastructure and the lightweight migration runner.
 - `catalogue` contains canonical import, validation, logical fingerprinting, CLI tooling, and the non-UI catalogue composition root.
-- `navigation` is UI infrastructure; `NavigationService` is the centralized FXML loader, typed controller initializer, and back-stack owner.
-- The JavaFX composition root validates the configured read-only catalogue, creates the image locator and explicit controller factory, and injects catalogue services into screen-specific controllers.
+- `navigation` is UI infrastructure; `NavigationService` is the centralized FXML loader, typed controller initializer, back-stack owner, history-preserving root replacer, and history-reset boundary.
+- The JavaFX composition root validates the configured read-only catalogue, creates the image locator, lifecycle service, application-scoped session coordinator and single `ApplicationControllerFactory`, then injects only existing catalogue dependencies into screen-specific controllers.
 
 ### Build and runtime
 
@@ -181,6 +183,15 @@ Stage 10 verification established that:
 - the Stage 10B real-production smoke passed all four Stage 9 strategies, same-seed determinism, valid different-seed variation, answer validation, and the structured impossible-request failure path;
 - all 145 tests pass without adding a JavaFX review UI or changing the Stage 9 repository/service API.
 
+Stage 11B verification established that:
+
+- session lifecycle no longer depends on result persistence, and examination result persistence remains a separate boundary without a production repository implementation;
+- normal completion requires exactly one answer for every generated question, while duplicate, early and repeated completion attempts fail deterministically;
+- the application-scoped coordinator preserves typed generation failures, never retains partial generation, derives progress/score, gates correctness by mode policy, restarts with injected new IDs/seeds and abandons without persistence;
+- `NavigationService.replace` preserves existing history without pushing the replaced root, while `resetTo` clears history; existing `show`/`goBack` behavior remains intact;
+- `ApplicationControllerFactory` remains the only FXML controller factory, and no Learning, Training or Examination UI entry was added;
+- all 163 tests pass and `./mvnw package` succeeds.
+
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
@@ -214,8 +225,8 @@ Source files must remain unchanged. SQLite catalogue ingestion consumes the cano
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and its runtime flow; Stage 9 added the UI-independent quiz-generation engine; Stage 10 added only editorial review/activation tooling and deterministic read-only catalogue materialization.
+- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and its runtime flow; Stage 9 added the UI-independent quiz-generation engine; Stage 10 added editorial review/activation tooling and deterministic read-only catalogue materialization; Stage 11B added only shared non-UI session/navigation infrastructure.
 
 ### Immediate next step
 
-Stage 10 implementation and the bounded Stage 10A pilot review are complete. The production quiz pool now contains 12 reviewed records across 4 countries, and Stage 10B proved all four existing Stage 9 strategies against that real pool. Stage 11 learning/training flows remain the next planned implementation stage; the rest of the catalogue remains unreviewed and ineligible. Examination behavior, authentication, statistics, mutable user persistence, and Windows packaging remain later stages.
+Stage 11B shared session/navigation infrastructure is complete. Stage 11C Learning Mode UI is the next bounded implementation pass, followed by Training UI. The production quiz pool remains 12 reviewed records across 4 countries; the rest of the catalogue remains unreviewed and ineligible. Examination behavior, authentication, statistics, mutable user persistence, and Windows packaging remain later stages.

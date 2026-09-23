@@ -47,7 +47,7 @@ Model ──► only Java/JDK types (never JavaFX)
 
 ### `PassportTrainerApplication`
 
-JavaFX composition root. Він визначає runtime locations, відкриває й перевіряє read-only `CatalogueApplicationContext`, створює `PassportImageLocator`, explicit controller factory та `NavigationService`, задає параметри головного `Stage` і відкриває START. Factory окремо завантажує та перевіряє map resources; помилка карти вимикає лише map action, а catalogue fallback залишається доступним. Якщо catalogue не відкривається або не проходить integrity validation, START залишається працездатним і показує локалізовану помилку. Composition root не містить бізнес-правил.
+JavaFX composition root. Він визначає runtime locations, відкриває й перевіряє read-only `CatalogueApplicationContext`, створює `PassportImageLocator`, application-scoped `QuizSessionCoordinator`, explicit `ApplicationControllerFactory` та `NavigationService`, задає параметри головного `Stage` і відкриває START. Coordinator використовує `QuizGenerationService`, окремий `QuizSessionLifecycleService` та application-owned suppliers для non-persisted session IDs/seeds; session state не належить catalogue context. Factory окремо завантажує та перевіряє map resources; помилка карти вимикає лише map action, а catalogue fallback залишається доступним. Якщо catalogue не відкривається або не проходить integrity validation, START залишається працездатним і показує локалізовану помилку. Composition root не містить бізнес-правил.
 
 ### `NavigationService`
 
@@ -60,6 +60,7 @@ JavaFX composition root. Він визначає runtime locations, відкри
 - дозволяє typed one-shot initialization controller після FXML injection і до показу root;
 - встановлює кореневий вузол однієї сцени;
 - веде instance-local back stack із попередніх roots;
+- підтримує `replace` без додавання поточного root до history та `resetTo` з очищенням history;
 - перетворює відсутні ресурси й помилки FXML на `NavigationException` із контекстом.
 
 Контролери не створюють `FXMLLoader`, `Scene` або `Stage`. Усі переходи й повернення виконуються через injected `NavigationService`; глобального navigation state немає.
@@ -74,7 +75,7 @@ JavaFX composition root. Він визначає runtime locations, відкри
 - `PassportListController` відображає всі документи одного entity;
 - `PassportDetailsController` показує metadata, image loading/error state та керування послідовністю зображень.
 
-`CatalogueControllerFactory` явно створює лише підтримувані controller types і передає `NavigationService`, сервіси, image locator, validated map definition та `ResourceBundle` через constructors. DI framework, service locator, controller SQL/TSV/filesystem scanning і загальний `MainController` не використовуються.
+`ApplicationControllerFactory` явно створює лише підтримувані controller types і передає `NavigationService`, сервіси, image locator, validated map definition та `ResourceBundle` через constructors. Це єдиний FXML controller factory; DI framework, service locator, controller SQL/TSV/filesystem scanning і загальний `MainController` не використовуються.
 
 ### Межа інтерактивної карти
 
@@ -103,6 +104,8 @@ Map metadata використовує окремий stable `mapRegionId` namesp
 | `QuizContent` | Sealed typed subject/option contract для country, document і document-type значень зі stable identity та окремим presentation label. |
 | `QuizCandidate` | Повна canonical eligibility projection документа, image, entity, continent memberships, review state, duplicate identity та SHA-256. |
 | `QuizGenerationRequest` | Immutable mode/count/options/type/scope/seed configuration однієї генерації. |
+| `QuizSessionConfiguration` | Immutable accepted mode/count/options/type/scope configuration до додавання technical session identity та seed. |
+| `QuizSessionLifecycle` | Explicit application state `CREATED`, `ACTIVE` або `COMPLETED`. |
 | `QuizGenerationFailureReason` | Машинно-читані причини invalid request, недостатнього pool або distractors. |
 | `QuizQuestion` | Typed subject, typed options, stable correct-answer ID і семантичні invariants конкретного question type. |
 | `QuizSession` | Стан навчальної, тренувальної або екзаменаційної сесії. |
@@ -207,15 +210,17 @@ Controller не будує filesystem paths і не сканує source collecti
 | `ContinentService` | `ContinentRepository` | Канонічний список континентів. |
 | `CountryService` | `CountryRepository` | Каталог entities, continent membership і lookup. |
 | `PassportService` | `PassportRepository` | Усі документи entity та їх зображення. |
-| `QuizService` | `ResultRepository`, `Clock` | Життєвий цикл валідної сесії, одноразове приймання stable answer ID, одноразове завершення та збереження результату лише для завершеного `EXAMINATION`. |
+| `QuizSessionLifecycleService` | `Clock` | Одноразове приймання stable answer ID, authoritative correctness, заборона duplicate/post-completion answer та завершення лише повністю answered session. |
+| `QuizSessionCoordinator` | `QuizGenerationService`, `QuizSessionLifecycleService`, ID/seed suppliers | Application-scoped `CREATED → ACTIVE → COMPLETED` state, один generation call, current index, progress/score, mode-safe feedback, restart та non-persisted abandonment. |
+| `ExamResultService` | `ResultRepository` | Окрема межа створення/збереження result лише для повністю answered completed `EXAMINATION`; concrete writable persistence залишається Stage 12/13 concern. |
 | `QuizGenerationService` | `PassportRepository`, `Clock`, injectable seeded `RandomGenerator` factory | Eligibility defense, request scopes, question/distractor strategies, randomization, uniqueness і створення повної `QuizSession` або structured failure. |
 | `AuthenticationService` | `UserRepository`, `PasswordHasher` | Пошук активного користувача й делегування безпечної перевірки пароля. |
 | `StatisticsService` | `ResultRepository` | Читання результатів і базове агрегування балів. |
 | `SettingsService` | `SettingsRepository` | Читання/збереження параметрів без знання способу зберігання. |
 
-`Clock` передається в `QuizService` і `QuizGenerationService`, щоб час можна було детерміновано контролювати в тестах. `QuizGenerationService` додатково створює рівно один random source із request seed на одну генерацію; production constructor використовує `SplittableRandom`, а test constructor приймає factory. Конкретний алгоритм хешування паролів навмисно не закодований в `AuthenticationService`: він буде окремою реалізацією `PasswordHasher`.
+`Clock` передається в `QuizSessionLifecycleService` і `QuizGenerationService`, щоб час можна було детерміновано контролювати в тестах. `QuizGenerationService` додатково створює рівно один random source із request seed на одну генерацію; production constructor використовує `SplittableRandom`, а test constructor приймає factory. `QuizSessionCoordinator` використовує injected `LongSupplier` для session ID та seed; тимчасовий anonymous user ID `0L` належить application infrastructure і не зберігається. Конкретний алгоритм хешування паролів навмисно не закодований в `AuthenticationService`: він буде окремою реалізацією `PasswordHasher`.
 
-`QuizQuestion` вимагає щонайменше два options з унікальними stable IDs, рівно одну option з `correctAnswerId` та type-specific subject/option shape. `QuizSession` вимагає непорожній набір запитань з унікальними ID, не більше однієї узгодженої відповіді на запитання, належність selected answer до options і відсутність відповідей на сторонні запитання. `ExamResult` гарантує `0 <= correctAnswers <= totalQuestions`, додатну кількість запитань і невід'ємну тривалість.
+`QuizQuestion` вимагає щонайменше два options з унікальними stable IDs, рівно одну option з `correctAnswerId` та type-specific subject/option shape. `QuizSession` вимагає непорожній набір запитань з унікальними ID, не більше однієї узгодженої відповіді на запитання, належність selected answer до options і відсутність відповідей на сторонні запитання. `QuizSessionLifecycleService` додатково не дозволяє normal completion, доки кожне питання не має відповіді. `ExamResult` гарантує `0 <= correctAnswers <= totalQuestions`, додатну кількість запитань і невід'ємну тривалість.
 
 ## Quiz generation
 
@@ -230,7 +235,7 @@ Generation не використовує JavaFX, FXML, localized prompts або 
 
 Один Fisher–Yates path перемішує blueprint order, distractor pools і final options через той самий seeded random source. У сесії не повторюються semantic question key, canonical correct document або correct image SHA-256. Distractor IDs у межах питання унікальні; document options походять із уже deduplicated candidate pool.
 
-Generation є all-or-nothing. Некоректний request повертає `INVALID_REQUEST`; недостатній eligible pool — `INSUFFICIENT_ELIGIBLE_DATA`; неможливий semantic distractor set — `INSUFFICIENT_DISTRACTORS` із question type, requested count і observed pool size. Partial session, fallback на unverified records і synthetic production content заборонені. Поточний production catalogue має нуль eligible records, тому generation очікувано й чисто завершується structured insufficiency failure.
+Generation є all-or-nothing. Некоректний request повертає `INVALID_REQUEST`; недостатній eligible pool — `INSUFFICIENT_ELIGIBLE_DATA`; неможливий semantic distractor set — `INSUFFICIENT_DISTRACTORS` із question type, requested count і observed pool size. Partial session, fallback на unverified records і synthetic production content заборонені. Історично Stage 9 production catalogue мав нуль eligible records і чисто повертав structured insufficiency failure. Після explicit Stage 10 review/activation поточний production pool містить 12 eligible documents для 4 verified entities; усі чотири strategies пройшли Stage 10B production smoke.
 
 ## Типовий потік виклику
 
@@ -268,10 +273,11 @@ Runtime composition:
 1. `ApplicationLocations` нормалізує configured catalogue/image locations;
 2. `CatalogueApplicationContext.openReadOnly` створює read-only `SQLiteConnectionProvider` і перевіряє migration version та catalogue integrity;
 3. context створює три SQLite repositories та `ContinentService`, `CountryService`, `PassportService` і `QuizGenerationService`;
-4. `PassportTrainerApplication` створює `PassportImageLocator` і `CatalogueControllerFactory`;
-5. factory окремо завантажує map resources, перевіряє hash/mappings/catalogue coverage і зберігає незалежний map availability state;
-6. `NavigationService` передає factory кожному `FXMLLoader`;
-7. factory constructor-injects лише залежності конкретного controller.
+4. `PassportTrainerApplication` створює `PassportImageLocator`, `QuizSessionLifecycleService`, application-scoped `QuizSessionCoordinator` та `ApplicationControllerFactory`;
+5. session coordinator отримує `QuizGenerationService` із catalogue context, але зберігається application composition root/factory, а не catalogue context;
+6. factory окремо завантажує map resources, перевіряє hash/mappings/catalogue coverage і зберігає незалежний map availability state;
+7. `NavigationService` передає factory кожному `FXMLLoader`;
+8. factory constructor-injects лише залежності конкретного controller; Stage 11B не додає mode controllers або user-visible mode entries.
 
 Failure to open or validate catalogue creates an unavailable factory: START remains loadable and disables both catalogue/map actions. Failure to load or validate only map resources disables map action but preserves the Stage 7 catalogue fallback. Service locator і global mutable singleton-об'єкти відсутні.
 
@@ -280,7 +286,7 @@ Failure to open or validate catalogue creates an unavailable factory: START rema
 - model, service і pure presentation тести не запускають JavaFX toolkit;
 - repository integration-тести використовують лише temporary SQLite DB;
 - map loader/validator тести перевіряють XML hardening, asset integrity, exact region/entity coverage, explicit list-only records і high-risk mappings;
-- catalogue UI smoke-тести завантажують real FXML через production navigation/controller factory, перевіряють map/list selection, keyboard activation, Unicode search, existing passport flow, real image decode, multi-image controls і back navigation на graphical JavaFX toolkit;
+- catalogue UI smoke-тести завантажують real FXML через production navigation/controller factory, перевіряють map/list selection, keyboard activation, Unicode search, existing passport flow, real image decode, multi-image controls, existing back navigation, `replace` history semantics і `resetTo` history clearing на graphical JavaFX toolkit;
 - UI тести не порівнюють pixel-perfect screenshots;
 - `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model;
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
@@ -288,7 +294,7 @@ Failure to open or validate catalogue creates an unavailable factory: START rema
 
 ## Що навмисно не реалізовано
 
-- quiz screens і mode-specific learning/training/examination orchestration;
+- quiz screens and complete mode-specific learning/training/examination UI flows;
 - конкретний password hashing algorithm;
 - JavaFX review/admin editor; Stage 10 review є окремим editorial CLI;
 - збереження активної quiz-сесії.
