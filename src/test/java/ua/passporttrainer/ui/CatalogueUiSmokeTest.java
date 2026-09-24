@@ -6,9 +6,12 @@ import javafx.geometry.Point2D;
 import javafx.application.Platform;
 import javafx.scene.Parent;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
@@ -30,13 +33,18 @@ import ua.passporttrainer.controller.ApplicationControllerFactory;
 import ua.passporttrainer.controller.LearningBrowserController;
 import ua.passporttrainer.controller.PassportDetailsController;
 import ua.passporttrainer.controller.PassportListController;
+import ua.passporttrainer.controller.TrainingAbandonmentConfirmation;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
+import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.map.WorldMapPane;
 import ua.passporttrainer.model.Country;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
 import ua.passporttrainer.model.QuizCandidate;
+import ua.passporttrainer.model.QuizQuestionType;
+import ua.passporttrainer.model.QuizSessionLifecycle;
 import ua.passporttrainer.presentation.LearningEntityPresentation;
+import ua.passporttrainer.presentation.TrainingScopePresentation;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.repository.PassportRepository;
@@ -51,10 +59,15 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.sql.SQLException;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Optional;
 import java.util.ResourceBundle;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.CountDownLatch;
@@ -109,6 +122,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        () -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -204,6 +218,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        () -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -261,6 +276,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(emptyAssetRoot),
+                        () -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -351,6 +367,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        () -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -404,6 +421,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        () -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -505,6 +523,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        () -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -626,6 +645,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(temporaryDirectory),
+                        () -> true,
                         resourcesWithoutMapGroupLabel()
                 );
                 NavigationService navigation = new NavigationService(
@@ -695,6 +715,7 @@ class CatalogueUiSmokeTest {
                         context,
                         coordinator,
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        () -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -708,7 +729,7 @@ class CatalogueUiSmokeTest {
 
                 Parent modeRoot = stage.getScene().getRoot();
                 assertFalse(control(modeRoot, "#learningButton", Button.class).isDisabled());
-                assertTrue(control(modeRoot, "#trainingButton", Button.class).isDisabled());
+                assertFalse(control(modeRoot, "#trainingButton", Button.class).isDisabled());
                 assertTrue(control(modeRoot, "#examinationButton", Button.class).isDisabled());
                 control(modeRoot, "#learningButton", Button.class).fire();
 
@@ -796,6 +817,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
+                                () -> true,
                                 RESOURCES
                         )
                 );
@@ -823,6 +845,402 @@ class CatalogueUiSmokeTest {
     }
 
     @Test
+    void completesVerticalTrainingWithImmediateFeedbackProgressResultAndMainMenu() throws Exception {
+        Path database = temporaryDirectory.resolve("training-vertical-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+        AtomicReference<TrainingUi> uiReference = new AtomicReference<>();
+        AtomicReference<Parent> questionRootReference = new AtomicReference<>();
+
+        onFxThread(() -> {
+            TrainingUi ui = openTrainingConfiguration(
+                    context,
+                    coordinator,
+                    new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                    () -> true
+            );
+            uiReference.set(ui);
+            Parent modeRoot = ui.modeRoot();
+            assertFalse(control(modeRoot, "#trainingButton", Button.class).isDisabled());
+            assertTrue(control(modeRoot, "#examinationButton", Button.class).isDisabled());
+
+            Parent configurationRoot = ui.configurationRoot();
+            assertEquals(5, control(
+                    configurationRoot, "#questionCountSpinner", Spinner.class
+            ).getValue());
+            assertEquals("4", control(configurationRoot, "#optionCountLabel", Label.class).getText());
+            assertTrue(control(
+                    configurationRoot, "#scopeComboBox", ComboBox.class
+            ).getValue() instanceof TrainingScopePresentation scope && scope.entityId().isEmpty());
+            configureQuestionType(configurationRoot, QuizQuestionType.DOCUMENT_TYPE, 2);
+            control(configurationRoot, "#startTrainingButton", Button.class).fire();
+
+            Parent questionRoot = ui.stage().getScene().getRoot();
+            questionRootReference.set(questionRoot);
+            assertTrue(control(questionRoot, "#submitButton", Button.class).isDisabled());
+            assertTrue(control(questionRoot, "#nextButton", Button.class).isDisabled());
+            assertEquals(
+                    MessageFormat.format(RESOURCES.getString("training.progress"), 1, 2),
+                    control(questionRoot, "#progressLabel", Label.class).getText()
+            );
+            String correctId = coordinator.currentQuestion().correctAnswerId();
+            String wrongId = questionOptions(questionRoot).stream()
+                    .map(option -> (String) option.getUserData())
+                    .filter(id -> !id.equals(correctId))
+                    .findFirst()
+                    .orElseThrow();
+            selectQuestionOption(questionRoot, wrongId);
+        });
+
+        awaitFxCondition(() -> !control(
+                questionRootReference.get(), "#submitButton", Button.class
+        ).isDisabled());
+        onFxThread(() -> {
+            TrainingUi ui = uiReference.get();
+            Parent questionRoot = questionRootReference.get();
+            long sessionId = coordinator.session().orElseThrow().id();
+            long seed = coordinator.randomSeed().orElseThrow();
+            control(questionRoot, "#submitButton", Button.class).fire();
+
+            assertEquals(
+                    RESOURCES.getString("training.incorrect"),
+                    control(questionRoot, "#feedbackLabel", Label.class).getText()
+            );
+            assertTrue(questionOptions(questionRoot).stream().allMatch(ToggleButton::isDisabled));
+            assertTrue(questionOptions(questionRoot).stream()
+                    .anyMatch(option -> option.getStyleClass().contains("correct-answer")));
+            assertTrue(questionOptions(questionRoot).stream()
+                    .anyMatch(option -> option.getStyleClass().contains("incorrect-answer")));
+            assertFalse(control(questionRoot, "#nextButton", Button.class).isDisabled());
+            control(questionRoot, "#nextButton", Button.class).fire();
+
+            assertSame(questionRoot, ui.stage().getScene().getRoot());
+            assertEquals(sessionId, coordinator.session().orElseThrow().id());
+            assertEquals(seed, coordinator.randomSeed().orElseThrow());
+            assertEquals(1, coordinator.session().orElseThrow().answers().size());
+            assertEquals(
+                    MessageFormat.format(RESOURCES.getString("training.progress"), 2, 2),
+                    control(questionRoot, "#progressLabel", Label.class).getText()
+            );
+            selectQuestionOption(questionRoot, coordinator.currentQuestion().correctAnswerId());
+        });
+
+        awaitFxCondition(() -> !control(
+                questionRootReference.get(), "#submitButton", Button.class
+        ).isDisabled());
+        onFxThread(() -> {
+            TrainingUi ui = uiReference.get();
+            Parent questionRoot = questionRootReference.get();
+            control(questionRoot, "#submitButton", Button.class).fire();
+            assertEquals(
+                    RESOURCES.getString("training.correct"),
+                    control(questionRoot, "#feedbackLabel", Label.class).getText()
+            );
+            control(questionRoot, "#nextButton", Button.class).fire();
+
+            Parent resultRoot = ui.stage().getScene().getRoot();
+            assertEquals(1, Integer.parseInt(control(
+                    resultRoot, "#correctCountLabel", Label.class
+            ).getText()));
+            assertEquals(1, Integer.parseInt(control(
+                    resultRoot, "#incorrectCountLabel", Label.class
+            ).getText()));
+            assertEquals("2", control(resultRoot, "#totalCountLabel", Label.class).getText());
+            assertEquals("50%", control(resultRoot, "#percentageLabel", Label.class).getText());
+            assertEquals(QuizSessionLifecycle.COMPLETED, coordinator.lifecycle().orElseThrow());
+            control(resultRoot, "#mainMenuButton", Button.class).fire();
+
+            Parent resetRoot = ui.stage().getScene().getRoot();
+            assertNotNull(resetRoot.lookup("#modeSelectionButton"));
+            assertFalse(ui.navigation().canGoBack());
+            assertTrue(coordinator.session().isEmpty());
+            ui.stage().close();
+        });
+    }
+
+    @Test
+    void repeatUsesFreshIdentityAndNewTrainingReturnsToConfiguration() throws Exception {
+        Path database = temporaryDirectory.resolve("training-repeat-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+        AtomicReference<TrainingUi> uiReference = new AtomicReference<>();
+        AtomicReference<Parent> questionRootReference = new AtomicReference<>();
+
+        onFxThread(() -> {
+            TrainingUi ui = openTrainingConfiguration(
+                    context,
+                    coordinator,
+                    new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                    () -> true
+            );
+            uiReference.set(ui);
+            configureQuestionType(ui.configurationRoot(), QuizQuestionType.DOCUMENT_TYPE, 1);
+            control(ui.configurationRoot(), "#startTrainingButton", Button.class).fire();
+            Parent questionRoot = ui.stage().getScene().getRoot();
+            questionRootReference.set(questionRoot);
+            selectQuestionOption(questionRoot, coordinator.currentQuestion().correctAnswerId());
+        });
+
+        awaitFxCondition(() -> !control(
+                questionRootReference.get(), "#submitButton", Button.class
+        ).isDisabled());
+        long[] firstIdentity = new long[2];
+        onFxThread(() -> {
+            TrainingUi ui = uiReference.get();
+            Parent questionRoot = questionRootReference.get();
+            firstIdentity[0] = coordinator.session().orElseThrow().id();
+            firstIdentity[1] = coordinator.randomSeed().orElseThrow();
+            control(questionRoot, "#submitButton", Button.class).fire();
+            control(questionRoot, "#nextButton", Button.class).fire();
+            Parent resultRoot = ui.stage().getScene().getRoot();
+            control(resultRoot, "#repeatButton", Button.class).fire();
+
+            Parent repeatedQuestionRoot = ui.stage().getScene().getRoot();
+            questionRootReference.set(repeatedQuestionRoot);
+            assertNotEquals(firstIdentity[0], coordinator.session().orElseThrow().id());
+            assertNotEquals(firstIdentity[1], coordinator.randomSeed().orElseThrow());
+            assertTrue(coordinator.session().orElseThrow().answers().isEmpty());
+            selectQuestionOption(repeatedQuestionRoot, coordinator.currentQuestion().correctAnswerId());
+        });
+
+        awaitFxCondition(() -> !control(
+                questionRootReference.get(), "#submitButton", Button.class
+        ).isDisabled());
+        onFxThread(() -> {
+            TrainingUi ui = uiReference.get();
+            Parent repeatedQuestionRoot = questionRootReference.get();
+            control(repeatedQuestionRoot, "#submitButton", Button.class).fire();
+            control(repeatedQuestionRoot, "#nextButton", Button.class).fire();
+            Parent resultRoot = ui.stage().getScene().getRoot();
+            control(resultRoot, "#newTrainingButton", Button.class).fire();
+
+            assertSame(ui.configurationRoot(), ui.stage().getScene().getRoot());
+            assertEquals(QuizSessionLifecycle.CREATED, coordinator.lifecycle().orElseThrow());
+            assertTrue(coordinator.session().isEmpty());
+            ui.stage().close();
+        });
+    }
+
+    @Test
+    void activeTrainingBackCancelPreservesStateAndConfirmAbandons() throws Exception {
+        Path database = temporaryDirectory.resolve("training-abandon-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+        Deque<Boolean> confirmationAnswers = new ArrayDeque<>(List.of(false, true));
+        AtomicReference<TrainingUi> uiReference = new AtomicReference<>();
+        AtomicReference<Parent> questionRootReference = new AtomicReference<>();
+
+        onFxThread(() -> {
+            TrainingUi ui = openTrainingConfiguration(
+                    context,
+                    coordinator,
+                    new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                    confirmationAnswers::removeFirst
+            );
+            uiReference.set(ui);
+            configureQuestionType(ui.configurationRoot(), QuizQuestionType.DOCUMENT_TYPE, 2);
+            control(ui.configurationRoot(), "#startTrainingButton", Button.class).fire();
+            Parent questionRoot = ui.stage().getScene().getRoot();
+            questionRootReference.set(questionRoot);
+            selectQuestionOption(questionRoot, coordinator.currentQuestion().correctAnswerId());
+        });
+
+        awaitFxCondition(() -> !control(
+                questionRootReference.get(), "#submitButton", Button.class
+        ).isDisabled());
+        onFxThread(() -> {
+            TrainingUi ui = uiReference.get();
+            Parent questionRoot = questionRootReference.get();
+            control(questionRoot, "#submitButton", Button.class).fire();
+            control(questionRoot, "#nextButton", Button.class).fire();
+            assertEquals(1, coordinator.currentQuestionIndex().orElseThrow());
+            assertEquals(1, coordinator.session().orElseThrow().answers().size());
+
+            control(questionRoot, "#backButton", Button.class).fire();
+            assertSame(questionRoot, ui.stage().getScene().getRoot());
+            assertEquals(QuizSessionLifecycle.ACTIVE, coordinator.lifecycle().orElseThrow());
+            assertEquals(1, coordinator.currentQuestionIndex().orElseThrow());
+            assertEquals(1, coordinator.session().orElseThrow().answers().size());
+
+            control(questionRoot, "#backButton", Button.class).fire();
+            assertSame(ui.configurationRoot(), ui.stage().getScene().getRoot());
+            assertEquals(QuizSessionLifecycle.CREATED, coordinator.lifecycle().orElseThrow());
+            assertTrue(coordinator.session().isEmpty());
+            assertTrue(confirmationAnswers.isEmpty());
+            ui.stage().close();
+        });
+    }
+
+    @Test
+    void imageCardQuestionKeepsPreSubmitLabelsNeutralAndRevealsFeedback() throws Exception {
+        Path database = temporaryDirectory.resolve("training-image-options-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+        AtomicReference<TrainingUi> uiReference = new AtomicReference<>();
+        AtomicReference<Parent> questionRootReference = new AtomicReference<>();
+
+        onFxThread(() -> {
+            TrainingUi ui = openTrainingConfiguration(
+                    context,
+                    coordinator,
+                    new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                    () -> true
+            );
+            uiReference.set(ui);
+            configureQuestionType(ui.configurationRoot(), QuizQuestionType.COUNTRY_TO_PASSPORT, 1);
+            control(ui.configurationRoot(), "#startTrainingButton", Button.class).fire();
+            Parent questionRoot = ui.stage().getScene().getRoot();
+            questionRootReference.set(questionRoot);
+
+            List<ToggleButton> options = questionOptions(questionRoot);
+            assertEquals(4, options.size());
+            assertEquals(
+                    java.util.Set.of("Варіант 1", "Варіант 2", "Варіант 3", "Варіант 4"),
+                    options.stream()
+                            .map(ToggleButton::getAccessibleText)
+                            .collect(java.util.stream.Collectors.toSet())
+            );
+            String subjectText = control(
+                    questionRoot, "#subjectTextLabel", Label.class
+            ).getText();
+            assertTrue(options.stream()
+                    .map(ToggleButton::getAccessibleText)
+                    .noneMatch(label -> label.contains(subjectText)));
+            selectQuestionOption(questionRoot, coordinator.currentQuestion().correctAnswerId());
+        });
+
+        awaitFxCondition(() -> !control(
+                questionRootReference.get(), "#submitButton", Button.class
+        ).isDisabled());
+        onFxThread(() -> {
+            TrainingUi ui = uiReference.get();
+            Parent questionRoot = questionRootReference.get();
+            control(questionRoot, "#submitButton", Button.class).fire();
+            assertEquals(
+                    RESOURCES.getString("training.correct"),
+                    control(questionRoot, "#feedbackLabel", Label.class).getText()
+            );
+            assertTrue(questionOptions(questionRoot).stream()
+                    .filter(option -> option.getStyleClass().contains("correct-answer"))
+                    .allMatch(ToggleButton::isDisabled));
+            control(questionRoot, "#nextButton", Button.class).fire();
+            assertNotNull(ui.stage().getScene().getRoot().lookup("#mainMenuButton"));
+            ui.stage().close();
+        });
+    }
+
+    @Test
+    void learningPracticeHandoffPreservesCanonicalScopeAndTypedFailure() throws Exception {
+        Path database = temporaryDirectory.resolve("learning-training-handoff-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
+                        context,
+                        coordinator,
+                        new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                        () -> true,
+                        RESOURCES
+                );
+                NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+                navigation.show(View.START);
+                stage.show();
+                control(stage.getScene().getRoot(), "#modeSelectionButton", Button.class).fire();
+                Parent modeRoot = stage.getScene().getRoot();
+                control(modeRoot, "#learningButton", Button.class).fire();
+                Parent selectionRoot = stage.getScene().getRoot();
+                ListView<?> entities = control(selectionRoot, "#entityList", ListView.class);
+                LearningEntityPresentation ukraine = entities.getItems().stream()
+                        .map(LearningEntityPresentation.class::cast)
+                        .filter(entity -> entity.displayName().equals("Україна"))
+                        .findFirst()
+                        .orElseThrow();
+                entities.getSelectionModel().select(entities.getItems().indexOf(ukraine));
+                control(selectionRoot, "#openButton", Button.class).fire();
+                Parent learningRoot = stage.getScene().getRoot();
+                control(learningRoot, "#practiceButton", Button.class).fire();
+
+                Parent configurationRoot = stage.getScene().getRoot();
+                ComboBox<TrainingScopePresentation> scopes = control(
+                        configurationRoot, "#scopeComboBox", ComboBox.class
+                );
+                TrainingScopePresentation preselected = scopes.getValue();
+                assertEquals(Optional.of(ukraine.entityId()), preselected.entityId());
+                assertEquals("Україна", preselected.displayName());
+                scopes.getSelectionModel().selectFirst();
+                assertTrue(scopes.getValue().entityId().isEmpty());
+                scopes.getSelectionModel().select(preselected);
+                configureQuestionType(
+                        configurationRoot,
+                        QuizQuestionType.PASSPORT_TO_COUNTRY,
+                        1
+                );
+                control(configurationRoot, "#startTrainingButton", Button.class).fire();
+
+                assertSame(configurationRoot, stage.getScene().getRoot());
+                assertEquals(
+                        java.util.Set.of(ukraine.entityId()),
+                        coordinator.configuration().orElseThrow().entityIds()
+                );
+                assertEquals(QuizSessionLifecycle.CREATED, coordinator.lifecycle().orElseThrow());
+                assertTrue(coordinator.session().isEmpty());
+                String failure = control(configurationRoot, "#errorLabel", Label.class).getText();
+                assertTrue(failure.contains(RESOURCES.getString(
+                        "questionType.PASSPORT_TO_COUNTRY"
+                )));
+                assertSame(learningRoot, navigationRootAfterBack(navigation, stage));
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void missingTrainingImageDisablesSubmissionWithoutAnsweringOrSkipping() throws Exception {
+        Path database = temporaryDirectory.resolve("training-missing-image-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+
+        onFxThread(() -> {
+            TrainingUi ui = openTrainingConfiguration(
+                    context,
+                    coordinator,
+                    new FileSystemPassportImageLocator(temporaryDirectory.resolve("missing-assets")),
+                    () -> true
+            );
+            try {
+                configureQuestionType(ui.configurationRoot(), QuizQuestionType.DOCUMENT_TYPE, 1);
+                control(ui.configurationRoot(), "#startTrainingButton", Button.class).fire();
+                Parent questionRoot = ui.stage().getScene().getRoot();
+                selectQuestionOption(questionRoot, coordinator.currentQuestion().options().getFirst().id());
+
+                assertEquals(
+                        RESOURCES.getString("training.imageUnavailable"),
+                        control(questionRoot, "#errorLabel", Label.class).getText()
+                );
+                assertTrue(control(questionRoot, "#submitButton", Button.class).isDisabled());
+                assertTrue(control(questionRoot, "#nextButton", Button.class).isDisabled());
+                assertTrue(coordinator.session().orElseThrow().answers().isEmpty());
+                assertEquals(0, coordinator.currentQuestionIndex().orElseThrow());
+                control(questionRoot, "#backButton", Button.class).fire();
+                assertSame(ui.configurationRoot(), ui.stage().getScene().getRoot());
+                assertTrue(coordinator.session().isEmpty());
+            } finally {
+                ui.stage().close();
+            }
+        });
+    }
+
+    @Test
     void showPreservesExistingBackStackBehavior() throws Exception {
         Path database = temporaryDirectory.resolve("navigation-show.sqlite");
         CatalogueTestSupport.importCatalogue(database);
@@ -838,6 +1256,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
+                                () -> true,
                                 RESOURCES
                         )
                 );
@@ -871,6 +1290,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
+                                () -> true,
                                 RESOURCES
                         )
                 );
@@ -908,6 +1328,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
+                                () -> true,
                                 RESOURCES
                         )
                 );
@@ -925,12 +1346,95 @@ class CatalogueUiSmokeTest {
         });
     }
 
+    private static TrainingUi openTrainingConfiguration(
+            CatalogueApplicationContext context,
+            QuizSessionCoordinator coordinator,
+            PassportImageLocator imageLocator,
+            TrainingAbandonmentConfirmation abandonmentConfirmation
+    ) {
+        Stage stage = new Stage();
+        ApplicationControllerFactory factory = ApplicationControllerFactory.available(
+                context,
+                coordinator,
+                imageLocator,
+                abandonmentConfirmation,
+                RESOURCES
+        );
+        NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+        navigation.show(View.START);
+        stage.show();
+        Parent startRoot = stage.getScene().getRoot();
+        control(startRoot, "#modeSelectionButton", Button.class).fire();
+        Parent modeRoot = stage.getScene().getRoot();
+        control(modeRoot, "#trainingButton", Button.class).fire();
+        Parent configurationRoot = stage.getScene().getRoot();
+        return new TrainingUi(stage, navigation, modeRoot, configurationRoot);
+    }
+
+    private static void configureQuestionType(
+            Parent configurationRoot,
+            QuizQuestionType selectedType,
+            int questionCount
+    ) {
+        control(
+                configurationRoot, "#passportToCountryCheckBox", CheckBox.class
+        ).setSelected(selectedType == QuizQuestionType.PASSPORT_TO_COUNTRY);
+        control(
+                configurationRoot, "#countryToPassportCheckBox", CheckBox.class
+        ).setSelected(selectedType == QuizQuestionType.COUNTRY_TO_PASSPORT);
+        control(
+                configurationRoot, "#documentTypeCheckBox", CheckBox.class
+        ).setSelected(selectedType == QuizQuestionType.DOCUMENT_TYPE);
+        control(
+                configurationRoot, "#findOrdinaryPassportCheckBox", CheckBox.class
+        ).setSelected(selectedType == QuizQuestionType.FIND_ORDINARY_PASSPORT);
+        @SuppressWarnings("unchecked")
+        Spinner<Integer> spinner = control(
+                configurationRoot, "#questionCountSpinner", Spinner.class
+        );
+        spinner.getValueFactory().setValue(questionCount);
+    }
+
+    private static List<ToggleButton> questionOptions(Parent questionRoot) {
+        return questionRoot.lookupAll(".question-option").stream()
+                .map(ToggleButton.class::cast)
+                .toList();
+    }
+
+    private static void selectQuestionOption(Parent questionRoot, String optionId) {
+        ToggleButton option = questionOptions(questionRoot).stream()
+                .filter(candidate -> optionId.equals(candidate.getUserData()))
+                .findFirst()
+                .orElseThrow();
+        option.setSelected(true);
+    }
+
+    private static Parent navigationRootAfterBack(NavigationService navigation, Stage stage) {
+        navigation.goBack();
+        return stage.getScene().getRoot();
+    }
+
+    private static void awaitFxCondition(BooleanSupplier condition) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (System.nanoTime() < deadline) {
+            AtomicBoolean satisfied = new AtomicBoolean();
+            onFxThread(() -> satisfied.set(condition.getAsBoolean()));
+            if (satisfied.get()) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        throw new AssertionError("JavaFX condition was not satisfied within 10 seconds");
+    }
+
     private static QuizSessionCoordinator sessionCoordinator(CatalogueApplicationContext context) {
+        AtomicLong sessionIds = new AtomicLong(1L);
+        AtomicLong seeds = new AtomicLong(100L);
         return new QuizSessionCoordinator(
                 context.quizGenerationService(),
                 new QuizSessionLifecycleService(Clock.fixed(Instant.EPOCH, ZoneOffset.UTC)),
-                () -> 1L,
-                () -> 1L
+                sessionIds::getAndIncrement,
+                seeds::getAndIncrement
         );
     }
 
@@ -1012,6 +1516,14 @@ class CatalogueUiSmokeTest {
 
     private static <T> T control(Parent root, String selector, Class<T> type) {
         return type.cast(root.lookup(selector));
+    }
+
+    private record TrainingUi(
+            Stage stage,
+            NavigationService navigation,
+            Parent modeRoot,
+            Parent configurationRoot
+    ) {
     }
 
     private record OpenFlow(

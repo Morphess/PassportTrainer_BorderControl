@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.CheckBox?>
+<?import javafx.scene.control.ComboBox?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.Spinner?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/25"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="ua.passporttrainer.controller.TrainingConfigurationController"
+            styleClass="screen-root">
+    <padding>
+        <Insets top="24.0" right="28.0" bottom="24.0" left="28.0" />
+    </padding>
+    <top>
+        <VBox alignment="CENTER" spacing="6.0">
+            <Label styleClass="screen-title" text="%training.configuration.title" />
+            <Label styleClass="support-label" text="%training.configuration.description" wrapText="true" />
+        </VBox>
+    </top>
+    <center>
+        <VBox maxWidth="700.0" spacing="16.0" styleClass="content-panel, training-configuration-panel">
+            <BorderPane.margin>
+                <Insets top="18.0" bottom="18.0" />
+            </BorderPane.margin>
+            <GridPane hgap="14.0" vgap="14.0">
+                <Label styleClass="section-title" text="%training.questionCount" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+                <Spinner fx:id="questionCountSpinner" editable="false" maxWidth="180.0"
+                         GridPane.columnIndex="1" GridPane.rowIndex="0" />
+                <Label styleClass="section-title" text="%training.optionCount" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                <Label fx:id="optionCountLabel" styleClass="support-label" text="4"
+                       GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                <Label styleClass="section-title" text="%training.scope" GridPane.columnIndex="0" GridPane.rowIndex="2" />
+                <ComboBox fx:id="scopeComboBox" maxWidth="Infinity" prefWidth="420.0"
+                          GridPane.columnIndex="1" GridPane.rowIndex="2" />
+            </GridPane>
+            <Label styleClass="section-title" text="%training.questionTypes" />
+            <VBox spacing="8.0">
+                <CheckBox fx:id="passportToCountryCheckBox" selected="true"
+                          text="%questionType.PASSPORT_TO_COUNTRY" />
+                <CheckBox fx:id="countryToPassportCheckBox" selected="true"
+                          text="%questionType.COUNTRY_TO_PASSPORT" />
+                <CheckBox fx:id="documentTypeCheckBox" selected="true"
+                          text="%questionType.DOCUMENT_TYPE" />
+                <CheckBox fx:id="findOrdinaryPassportCheckBox" selected="true"
+                          text="%questionType.FIND_ORDINARY_PASSPORT" />
+            </VBox>
+            <Label fx:id="capacityLabel" styleClass="support-label" wrapText="true" />
+            <Label fx:id="errorLabel" styleClass="error-label" wrapText="true" />
+        </VBox>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER" spacing="12.0">
+            <Button fx:id="backButton" onAction="#goBack" text="%common.back" />
+            <Button fx:id="startTrainingButton" defaultButton="true" onAction="#startTraining"
+                    styleClass="primary-button" text="%training.start" />
+        </HBox>
+    </bottom>
+</BorderPane>

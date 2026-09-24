@@ -10,6 +10,7 @@ import javafx.application.Application;
 import javafx.stage.Stage;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
 import ua.passporttrainer.controller.ApplicationControllerFactory;
+import ua.passporttrainer.controller.JavaFxTrainingAbandonmentConfirmation;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.navigation.NavigationService;
@@ -42,7 +43,11 @@ public final class PassportTrainerApplication extends Application {
                     sessionSeeds::nextLong
             );
             controllerFactory = ApplicationControllerFactory.available(
-                    catalogueContext, sessionCoordinator, imageLocator, messages
+                    catalogueContext,
+                    sessionCoordinator,
+                    imageLocator,
+                    new JavaFxTrainingAbandonmentConfirmation(messages),
+                    messages
             );
         } catch (SQLException | RuntimeException exception) {
             controllerFactory = ApplicationControllerFactory.unavailable(exception, imageLocator, messages);

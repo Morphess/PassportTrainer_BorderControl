@@ -75,18 +75,20 @@ The roadmap preserves the established architecture and product scope. Details re
 
 ## 9. Learning and training modes — Stage 11
 
-- **Status:** In progress; shared Stage 11B infrastructure and Stage 11C Learning Mode completed.
+- **Status:** Learning and Training completed in Stage 11D; Examination readiness hardened in Stage 11E.
 - **Goal:** provide the required learning and training experiences using the shared quiz engine.
 - **Primary result:** distinct learning and training flows with behavior appropriate to each existing product mode.
 - **Delivered in Stage 11B:** JavaFX-independent accepted configuration and `CREATED → ACTIVE → COMPLETED` coordination; lifecycle/result-persistence separation; complete-answer completion invariant; injected anonymous identity/session ID/seed boundaries; mode-safe feedback policy; `NavigationService.replace`/`resetTo`; and the single renamed `ApplicationControllerFactory`. No mode UI or persistence was introduced.
-- **Delivered in Stage 11C:** a non-scored Learning flow from mode selection through an eligible-country list into a safe passport browser; the JavaFX-independent `LearningService` reuses the authoritative quiz-candidate query and presents only canonical verified eligible material. Training remains Stage 11D and Examination remains Stage 12.
+- **Delivered in Stage 11C:** a non-scored Learning flow from mode selection through an eligible-country list into a safe passport browser; the JavaFX-independent `LearningService` reuses the authoritative quiz-candidate query and presents only canonical verified eligible material.
+- **Delivered in Stage 11D:** a complete non-persistent Training flow with global/exact-country configuration, all four generated question types, safe image handling, coordinator-authoritative immediate feedback, in-place progression, in-memory results, repeat/new/main-menu actions, confirmed abandonment, and canonical Learning-to-Training country handoff. Examination remains Stage 12.
+- **Delivered in Stage 11E:** focused Examination mode-safety, completion-invariant, shared-presentation, result-boundary and duration verification; the unchanged production pool deterministically supports a 10-question global Examination request with 4 options and all four allowed question types. Examination UI remains disabled and writable result persistence remains a Stage 12/13 policy decision.
 - **Dependencies:** the completed Stage 9 quiz engine, Stage 10 reviewed-catalogue infrastructure, and Stage 7 catalogue UI foundations.
 
 ## 10. Examination mode — Stage 12
 
 - **Goal:** provide a controlled examination flow and reliable result calculation.
 - **Primary result:** examination lifecycle, completion rules, scoring, and result persistence consistent with established contracts.
-- **Dependencies:** the completed Stage 9 quiz engine, Stage 11 shared mode infrastructure, and writable result persistence.
+- **Dependencies:** the completed Stage 9 quiz engine, Stage 11 shared mode infrastructure, and an explicit Stage 12/13 decision whether `ResultRepository` remains a shared ExamResult write/Statistics read contract or is split into command/query boundaries before writable persistence is wired.
 
 ## 11. Users, settings and statistics — Stage 13
 

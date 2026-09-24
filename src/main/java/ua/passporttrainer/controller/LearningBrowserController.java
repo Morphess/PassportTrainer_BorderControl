@@ -16,6 +16,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.StackPane;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.navigation.NavigationService;
+import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.presentation.LearningDocumentPresentation;
 import ua.passporttrainer.service.LearningService;
 
@@ -52,6 +53,8 @@ public final class LearningBrowserController {
     private Button previousButton;
     @FXML
     private Button nextButton;
+    @FXML
+    private Button practiceButton;
 
     public LearningBrowserController(
             NavigationService navigationService,
@@ -78,6 +81,7 @@ public final class LearningBrowserController {
         Objects.requireNonNull(loadingIndicator, "loadingIndicator was not injected");
         Objects.requireNonNull(previousButton, "previousButton was not injected");
         Objects.requireNonNull(nextButton, "nextButton was not injected");
+        Objects.requireNonNull(practiceButton, "practiceButton was not injected");
 
         passportImageView.setPreserveRatio(true);
         passportImageView.setSmooth(true);
@@ -115,6 +119,19 @@ public final class LearningBrowserController {
             documentIndex++;
             showCurrentDocument();
         }
+    }
+
+    @FXML
+    private void practiceCurrentEntity() {
+        if (documentIndex < 0 || documentIndex >= documents.size()) {
+            return;
+        }
+        String entityId = documents.get(documentIndex).entityId();
+        navigationService.show(
+                View.TRAINING_CONFIGURATION,
+                TrainingConfigurationController.class,
+                controller -> controller.showForEntity(entityId)
+        );
     }
 
     @FXML
@@ -212,6 +229,7 @@ public final class LearningBrowserController {
     private void updateNavigationControls() {
         previousButton.setDisable(documentIndex <= 0);
         nextButton.setDisable(documentIndex < 0 || documentIndex + 1 >= documents.size());
+        practiceButton.setDisable(documentIndex < 0 || documentIndex >= documents.size());
     }
 
     private static void setOptionalText(Label label, String text) {

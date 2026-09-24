@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -185,17 +186,52 @@ class QuizSessionCoordinatorTest {
     }
 
     @Test
-    void examinationSubmissionDoesNotExposeCorrectnessWhileActive() {
+    void examinationHidesFeedbackAndScoreUntilValidCompletion() {
         coordinator.configure(configuration(QuizMode.EXAMINATION));
-        coordinator.start();
+        QuizSession active = coordinator.start();
+        assertNull(active.completedAt());
 
-        QuizAnswerSubmissionResult result = coordinator.submitAnswer(
-                coordinator.currentQuestion().correctAnswerId()
+        QuizQuestion firstQuestion = coordinator.currentQuestion();
+        QuizAnswerSubmissionResult firstResult = coordinator.submitAnswer(
+                firstQuestion.correctAnswerId()
         );
 
         assertAll(
-                () -> assertInstanceOf(QuizAnswerSubmissionResult.Accepted.class, result),
+                () -> assertInstanceOf(QuizAnswerSubmissionResult.Accepted.class, firstResult),
+                () -> assertFalse(firstResult instanceof QuizAnswerSubmissionResult.Feedback),
+                () -> assertTrue(coordinator.visibleScore().isEmpty()),
+                () -> assertThrows(
+                        IllegalStateException.class,
+                        () -> coordinator.submitAnswer(firstQuestion.correctAnswerId())
+                ),
+                () -> assertThrows(IllegalStateException.class, coordinator::complete),
+                () -> assertNull(coordinator.session().orElseThrow().completedAt())
+        );
+
+        coordinator.advance();
+        QuizAnswerSubmissionResult finalResult = coordinator.submitAnswer(
+                wrongAnswer(coordinator.currentQuestion())
+        );
+        QuizAnswerSubmissionResult.Accepted accepted = assertInstanceOf(
+                QuizAnswerSubmissionResult.Accepted.class,
+                finalResult
+        );
+        assertAll(
+                () -> assertTrue(accepted.completionReady()),
                 () -> assertTrue(coordinator.visibleScore().isEmpty())
+        );
+
+        QuizSession completed = coordinator.complete();
+
+        assertAll(
+                () -> assertEquals(QuizSessionLifecycle.COMPLETED, coordinator.lifecycle().orElseThrow()),
+                () -> assertEquals(2, completed.answers().size()),
+                () -> assertEquals(CLOCK.instant(), completed.completedAt()),
+                () -> assertEquals(1, coordinator.visibleScore().orElseThrow()),
+                () -> assertThrows(
+                        IllegalStateException.class,
+                        () -> coordinator.submitAnswer(firstQuestion.correctAnswerId())
+                )
         );
     }
 

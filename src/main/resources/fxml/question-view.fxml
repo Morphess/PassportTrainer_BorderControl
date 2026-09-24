@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.ProgressIndicator?>
+<?import javafx.scene.image.ImageView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.StackPane?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/25"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="ua.passporttrainer.controller.QuestionController"
+            styleClass="screen-root, question-screen">
+    <padding>
+        <Insets top="16.0" right="22.0" bottom="16.0" left="22.0" />
+    </padding>
+    <top>
+        <VBox alignment="CENTER" spacing="5.0">
+            <Label fx:id="progressLabel" styleClass="support-label, question-progress" />
+            <Label fx:id="promptLabel" styleClass="screen-title, question-prompt" textAlignment="CENTER" wrapText="true" />
+            <Label fx:id="feedbackLabel" styleClass="question-feedback" />
+            <Label fx:id="errorLabel" styleClass="error-label" wrapText="true" />
+        </VBox>
+    </top>
+    <center>
+        <VBox alignment="CENTER" spacing="12.0">
+            <BorderPane.margin>
+                <Insets top="10.0" bottom="10.0" />
+            </BorderPane.margin>
+            <Label fx:id="subjectTextLabel" styleClass="question-subject-text" textAlignment="CENTER" wrapText="true" />
+            <StackPane fx:id="subjectImagePane" maxHeight="250.0" minHeight="210.0"
+                       prefHeight="240.0" prefWidth="420.0" styleClass="image-panel, question-subject-image">
+                <ImageView fx:id="subjectImageView" fitHeight="210.0" fitWidth="380.0"
+                           preserveRatio="true" smooth="true" />
+                <ProgressIndicator fx:id="subjectLoadingIndicator" maxHeight="52.0" maxWidth="52.0" />
+            </StackPane>
+            <VBox fx:id="textOptionsBox" alignment="CENTER" maxWidth="620.0" spacing="8.0" />
+            <GridPane fx:id="imageOptionsGrid" alignment="CENTER" hgap="12.0" vgap="10.0" />
+        </VBox>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER" spacing="12.0">
+            <Button fx:id="backButton" onAction="#requestBack" text="%common.back" />
+            <Button fx:id="submitButton" defaultButton="true" disable="true"
+                    onAction="#submitAnswer" styleClass="primary-button" text="%training.submit" />
+            <Button fx:id="nextButton" disable="true" onAction="#showNextQuestion" text="%training.next" />
+        </HBox>
+    </bottom>
+</BorderPane>

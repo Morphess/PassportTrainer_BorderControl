@@ -1,14 +1,17 @@
 package ua.passporttrainer.controller;
 
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
+import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.map.MapDataException;
 import ua.passporttrainer.map.WorldMapDefinition;
 import ua.passporttrainer.map.WorldMapResourceLoader;
 import ua.passporttrainer.map.WorldMapValidator;
-import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.navigation.NavigationControllerFactory;
 import ua.passporttrainer.navigation.NavigationService;
+import ua.passporttrainer.presentation.QuestionPresentationMapper;
+import ua.passporttrainer.presentation.TrainingGenerationFailureFormatter;
 import ua.passporttrainer.service.QuizSessionCoordinator;
+import ua.passporttrainer.service.TrainingConfigurationFactory;
 
 import java.util.Objects;
 import java.util.ResourceBundle;
@@ -24,6 +27,10 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     private final Throwable mapFailure;
     private final PassportImageLocator imageLocator;
     private final ResourceBundle resources;
+    private final TrainingAbandonmentConfirmation abandonmentConfirmation;
+    private final TrainingConfigurationFactory trainingConfigurationFactory;
+    private final QuestionPresentationMapper questionPresentationMapper;
+    private final TrainingGenerationFailureFormatter trainingFailureFormatter;
 
     private ApplicationControllerFactory(
             CatalogueApplicationContext catalogueContext,
@@ -33,6 +40,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
             ResourceBundle regionLabels,
             Throwable mapFailure,
             PassportImageLocator imageLocator,
+            TrainingAbandonmentConfirmation abandonmentConfirmation,
             ResourceBundle resources
     ) {
         this.catalogueContext = catalogueContext;
@@ -43,16 +51,22 @@ public final class ApplicationControllerFactory implements NavigationControllerF
         this.mapFailure = mapFailure;
         this.imageLocator = Objects.requireNonNull(imageLocator, "imageLocator");
         this.resources = Objects.requireNonNull(resources, "resources");
+        this.abandonmentConfirmation = abandonmentConfirmation;
+        this.trainingConfigurationFactory = new TrainingConfigurationFactory();
+        this.questionPresentationMapper = new QuestionPresentationMapper(resources);
+        this.trainingFailureFormatter = new TrainingGenerationFailureFormatter(resources);
     }
 
     public static ApplicationControllerFactory available(
             CatalogueApplicationContext catalogueContext,
             QuizSessionCoordinator sessionCoordinator,
             PassportImageLocator imageLocator,
+            TrainingAbandonmentConfirmation abandonmentConfirmation,
             ResourceBundle resources
     ) {
         Objects.requireNonNull(catalogueContext, "catalogueContext");
         Objects.requireNonNull(sessionCoordinator, "sessionCoordinator");
+        Objects.requireNonNull(abandonmentConfirmation, "abandonmentConfirmation");
         WorldMapDefinition mapDefinition = null;
         ResourceBundle regionLabels = null;
         Throwable mapFailure = null;
@@ -71,7 +85,8 @@ public final class ApplicationControllerFactory implements NavigationControllerF
         }
         return new ApplicationControllerFactory(
                 catalogueContext, sessionCoordinator, null,
-                mapDefinition, regionLabels, mapFailure, imageLocator, resources
+                mapDefinition, regionLabels, mapFailure, imageLocator,
+                abandonmentConfirmation, resources
         );
     }
 
@@ -82,7 +97,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     ) {
         Throwable failure = Objects.requireNonNull(catalogueFailure, "catalogueFailure");
         return new ApplicationControllerFactory(
-                null, null, failure, null, null, failure, imageLocator, resources
+                null, null, failure, null, null, failure, imageLocator, null, resources
         );
     }
 
@@ -112,6 +127,31 @@ public final class ApplicationControllerFactory implements NavigationControllerF
         if (controllerType == LearningBrowserController.class) {
             return new LearningBrowserController(
                     navigationService, context.learningService(), imageLocator, resources
+            );
+        }
+        if (controllerType == TrainingConfigurationController.class) {
+            return new TrainingConfigurationController(
+                    navigationService,
+                    sessionCoordinator,
+                    context.learningService(),
+                    trainingConfigurationFactory,
+                    trainingFailureFormatter,
+                    resources
+            );
+        }
+        if (controllerType == QuestionController.class) {
+            return new QuestionController(
+                    navigationService,
+                    sessionCoordinator,
+                    questionPresentationMapper,
+                    imageLocator,
+                    abandonmentConfirmation,
+                    resources
+            );
+        }
+        if (controllerType == TrainingResultController.class) {
+            return new TrainingResultController(
+                    navigationService, sessionCoordinator, trainingFailureFormatter, resources
             );
         }
         if (controllerType == WorldMapController.class) {

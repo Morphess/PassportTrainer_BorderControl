@@ -44,6 +44,9 @@
             <Label fx:id="documentCounterLabel" styleClass="support-label" />
             <Button fx:id="nextButton" accessibleText="%learning.nextAccessible"
                     onAction="#showNextDocument" text="%learning.next" />
+            <Button fx:id="practiceButton" accessibleText="%learning.practiceAccessible"
+                    onAction="#practiceCurrentEntity" styleClass="primary-button"
+                    text="%learning.practice" />
         </HBox>
     </bottom>
 </BorderPane>

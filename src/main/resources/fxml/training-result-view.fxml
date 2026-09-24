@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/25"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="ua.passporttrainer.controller.TrainingResultController"
+            styleClass="screen-root">
+    <padding>
+        <Insets top="28.0" right="28.0" bottom="28.0" left="28.0" />
+    </padding>
+    <top>
+        <VBox alignment="CENTER" spacing="8.0">
+            <Label styleClass="screen-title" text="%training.result.title" />
+            <Label styleClass="support-label" text="%training.result.description" />
+        </VBox>
+    </top>
+    <center>
+        <VBox alignment="CENTER" maxWidth="620.0" spacing="18.0" styleClass="content-panel, training-result-panel">
+            <GridPane alignment="CENTER" hgap="24.0" vgap="12.0">
+                <Label styleClass="section-title" text="%training.result.correct" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+                <Label fx:id="correctCountLabel" styleClass="result-value" GridPane.columnIndex="1" GridPane.rowIndex="0" />
+                <Label styleClass="section-title" text="%training.result.incorrect" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                <Label fx:id="incorrectCountLabel" styleClass="result-value" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                <Label styleClass="section-title" text="%training.result.total" GridPane.columnIndex="0" GridPane.rowIndex="2" />
+                <Label fx:id="totalCountLabel" styleClass="result-value" GridPane.columnIndex="1" GridPane.rowIndex="2" />
+                <Label styleClass="section-title" text="%training.result.percentage" GridPane.columnIndex="0" GridPane.rowIndex="3" />
+                <Label fx:id="percentageLabel" styleClass="result-value" GridPane.columnIndex="1" GridPane.rowIndex="3" />
+            </GridPane>
+            <Label fx:id="errorLabel" styleClass="error-label" wrapText="true" />
+        </VBox>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER" spacing="10.0">
+            <Button fx:id="repeatButton" onAction="#repeatTraining" styleClass="primary-button"
+                    text="%training.result.repeat" />
+            <Button fx:id="newTrainingButton" onAction="#newTraining" text="%training.result.newTraining" />
+            <Button fx:id="mainMenuButton" onAction="#openMainMenu" text="%training.result.mainMenu" />
+        </HBox>
+    </bottom>
+</BorderPane>

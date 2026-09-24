@@ -24,8 +24,11 @@
             <Button fx:id="learningButton" defaultButton="true" maxWidth="Infinity"
                     onAction="#openLearning" styleClass="primary-button" text="%modes.learning" />
             <Label styleClass="support-label" text="%modes.learningDescription" wrapText="true" />
-            <Button fx:id="trainingButton" disable="true" maxWidth="Infinity" text="%modes.trainingUnavailable" />
-            <Button fx:id="examinationButton" disable="true" maxWidth="Infinity" text="%modes.examinationUnavailable" />
+            <Button fx:id="trainingButton" maxWidth="Infinity"
+                    onAction="#openTraining" text="%modes.training" />
+            <Label styleClass="support-label" text="%modes.trainingDescription" wrapText="true" />
+            <Button fx:id="examinationButton" disable="true" maxWidth="Infinity"
+                    text="%modes.examinationUnavailable" />
         </VBox>
     </center>
     <bottom>
