@@ -35,6 +35,10 @@
                 <Label styleClass="section-title" text="%examination.result.duration" GridPane.columnIndex="0" GridPane.rowIndex="4" />
                 <Label fx:id="durationLabel" styleClass="result-value" GridPane.columnIndex="1" GridPane.rowIndex="4" />
             </GridPane>
+            <Label fx:id="persistenceStatusLabel" managed="false" visible="false"
+                   wrapText="true" />
+            <Button fx:id="retrySaveButton" managed="false" onAction="#retrySave"
+                    text="%examination.result.retrySave" visible="false" />
         </VBox>
     </center>
     <bottom>

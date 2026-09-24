@@ -1,5 +1,6 @@
 package ua.passporttrainer.service;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -7,7 +8,11 @@ import java.time.ZoneOffset;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
+import ua.passporttrainer.database.ApplicationDatabaseContext;
+import ua.passporttrainer.model.AssessmentSource;
+import ua.passporttrainer.model.ExamResult;
 import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.model.QuizQuestion;
 import ua.passporttrainer.model.QuizQuestionType;
@@ -15,9 +20,11 @@ import ua.passporttrainer.model.QuizSession;
 import ua.passporttrainer.model.QuizSessionConfiguration;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExaminationProductionReadinessTest {
@@ -30,8 +37,12 @@ class ExaminationProductionReadinessTest {
             ZoneOffset.UTC
     );
 
+    @TempDir
+    Path temporaryDirectory;
+
     @Test
     void runsDeterministicFixedExaminationAgainstReadOnlyProductionCatalogue() throws Exception {
+        byte[] catalogueBefore = Files.readAllBytes(PRODUCTION_CATALOGUE);
         CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(PRODUCTION_CATALOGUE);
         QuizSessionConfiguration configuration = new ExaminationConfigurationFactory().create();
         QuizSessionCoordinator firstCoordinator = coordinator(context, 800L);
@@ -54,6 +65,18 @@ class ExaminationProductionReadinessTest {
             }
         }
         QuizSession completed = firstCoordinator.complete();
+        ApplicationDatabaseContext applicationDatabase = ApplicationDatabaseContext.open(
+                temporaryDirectory.resolve("application.sqlite")
+        );
+        ExamResult saved = applicationDatabase.examResultService().saveExamResult(
+                completed.id(),
+                completed,
+                AssessmentSource.GENERATED,
+                firstCoordinator.assessmentProvenance()
+        );
+        ExamResult reloaded = applicationDatabase.resultRepository()
+                .findById(saved.id())
+                .orElseThrow();
 
         assertAll(
                 () -> assertEquals(QuizMode.EXAMINATION, configuration.mode()),
@@ -80,7 +103,20 @@ class ExaminationProductionReadinessTest {
                 )),
                 () -> assertTrue(completed.completed()),
                 () -> assertEquals(10, completed.answers().size()),
-                () -> assertEquals(10, firstCoordinator.visibleScore().orElseThrow())
+                () -> assertEquals(10, firstCoordinator.visibleScore().orElseThrow()),
+                () -> assertEquals(saved, reloaded),
+                () -> assertEquals(AssessmentSource.GENERATED, reloaded.assessmentSource()),
+                () -> assertTrue(reloaded.assessmentProvenance().isEmpty()),
+                () -> assertEquals(CLOCK.instant(), reloaded.startedAt()),
+                () -> assertEquals(CLOCK.instant(), reloaded.completedAt()),
+                () -> assertEquals(10, reloaded.correctAnswers()),
+                () -> assertEquals(10, reloaded.totalQuestions()),
+                () -> assertEquals(0, reloaded.durationSeconds()),
+                () -> assertNull(reloaded.userId()),
+                () -> assertArrayEquals(
+                        catalogueBefore,
+                        Files.readAllBytes(PRODUCTION_CATALOGUE)
+                )
         );
     }
 

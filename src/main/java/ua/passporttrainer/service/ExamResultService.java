@@ -1,8 +1,10 @@
 package ua.passporttrainer.service;
 
-import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 
+import ua.passporttrainer.model.AssessmentProvenance;
+import ua.passporttrainer.model.AssessmentSource;
 import ua.passporttrainer.model.ExamResult;
 import ua.passporttrainer.model.QuizAnswer;
 import ua.passporttrainer.model.QuizMode;
@@ -18,8 +20,15 @@ public final class ExamResultService {
         this.resultRepository = Objects.requireNonNull(resultRepository, "resultRepository");
     }
 
-    public ExamResult saveExamResult(long resultId, QuizSession completedSession) {
+    public ExamResult saveExamResult(
+            long resultId,
+            QuizSession completedSession,
+            AssessmentSource assessmentSource,
+            Optional<AssessmentProvenance> assessmentProvenance
+    ) {
         Objects.requireNonNull(completedSession, "completedSession");
+        Objects.requireNonNull(assessmentSource, "assessmentSource");
+        Objects.requireNonNull(assessmentProvenance, "assessmentProvenance");
         if (completedSession.mode() != QuizMode.EXAMINATION) {
             throw new IllegalArgumentException("Quiz session is not an examination");
         }
@@ -36,21 +45,19 @@ public final class ExamResultService {
                 correctAnswers++;
             }
         }
-        long durationSeconds = Math.max(
-                0,
-                Duration.between(
-                        completedSession.startedAt(),
-                        completedSession.completedAt()
-                ).toSeconds()
-        );
+        Long userId = completedSession.userId() == QuizSessionCoordinator.ANONYMOUS_USER_ID
+                ? null
+                : completedSession.userId();
         ExamResult result = new ExamResult(
                 resultId,
-                completedSession.userId(),
+                userId,
                 completedSession.id(),
+                assessmentSource,
+                assessmentProvenance,
+                completedSession.startedAt(),
+                completedSession.completedAt(),
                 correctAnswers,
-                completedSession.questions().size(),
-                durationSeconds,
-                completedSession.completedAt()
+                completedSession.questions().size()
         );
         return resultRepository.save(result);
     }

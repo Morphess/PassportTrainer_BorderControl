@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after Stage 12B. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after Stage 12C. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -32,41 +32,42 @@ This document records the repository state after Stage 12B. It distinguishes imp
 - Repository interfaces for continents, countries, passports, users, results, and settings; `PassportRepository` includes one bounded quiz-candidate read.
 - Service-layer classes using constructor injection, including catalogue browsing by canonical continent membership.
 - `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
-- Separate in-memory quiz-session lifecycle and examination-result boundaries: `QuizSessionLifecycleService` depends only on `Clock`, determines correctness, rejects duplicate/post-completion answers and early completion, while `ExamResultService` alone depends on `ResultRepository`.
+- A separate writable per-user application SQLite database, created from checksummed application migrations independently of the strictly read-only passport catalogue.
+- Separate quiz-session lifecycle and examination-result boundaries: `QuizSessionLifecycleService` owns in-memory session correctness/completion, while `ExamResultService` is the sole result writer through `ResultRepository`; `SQLiteResultRepository` provides transactional idempotent persistence and shared `StatisticsService` reads.
 - `QuizGenerationService`, which filters canonical verified eligible candidates, applies canonical continent/entity/document-type scopes, builds all four supported question types, selects semantic distractors, shuffles through one injectable seeded random source, prevents repeated correct documents/images, and exposes the same generation algorithm to full-session callers and `GeneratedQuestionSetProvider` without creating a temporary second session.
 - An application-scoped, JavaFX-independent `QuizSessionCoordinator` that depends on `QuestionSetProvider`, owns session identity/timestamps/answers/progression/completion through `QuizSessionLifecycleService`, preserves immutable accepted configuration and optional assessment provenance, provides mode-safe feedback/score disclosure, and supports restart and non-persisted abandonment.
 - A minimal `QuizModePolicy` that exposes immediate correctness and active score only for Training; Examination receives accepted-answer progress only and exposes score after completion.
 - A complete non-scored Learning Mode UI: START mode entry, explicit mode selection, reviewed-entity selection, and a passive document browser with localized metadata, safe image loading, navigation progress, Previous/Next, country-scoped Training handoff, and back navigation.
 - A complete non-persistent Training Mode UI: global or country-scoped configuration, all four generated question types across image/text and image-card layouts, safe image gating, authoritative immediate feedback, in-place progression, completion/result summary, restart, new configuration, main-menu reset, and confirmed abandonment.
-- A complete generated, non-persistent Examination Mode UI: fixed 10-question/4-option global policy across all four existing types, confirmation, shared question presentation, no immediate correctness or running score, in-place progression, confirmed abandonment, completion-only score/duration result, new Examination, and main-menu reset.
+- A complete generated Examination Mode UI with a fixed 10-question/4-option global policy, no active correctness/running score, confirmed abandonment, completion-only result disclosure, transactional result persistence, explicit localized save retry, new Examination, and main-menu reset.
 - A JavaFX-independent `LearningService` that reuses `PassportRepository.findQuizEligibleCandidates()`, defensively applies the canonical `QuizCandidate.usable()` contract, deduplicates by canonical document, and returns stable presentation-safe entity/document models without creating a `QuizSession`.
-- One hundred ninety-nine JUnit tests, including isolated SQLite/review/catalogue integration, quiz-generation and lifecycle invariants, `QuestionSetProvider` delegation/provenance, fixed Examination policy, Learning/Training regression, deterministic production Training and 10-question Examination smokes, and JavaFX vertical Learning, Training, Examination, navigation, disclosure, abandonment, failure, result, catalogue, map, and image behavior.
+- A 207-test JUnit suite covering isolated catalogue and application SQLite integration, migrations/version rejection, result idempotency/provenance/anonymous identity, quiz-generation and lifecycle invariants, Learning/Training regression, deterministic production Training/Examination smokes, and JavaFX vertical behavior including persistence retry.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
 - The verified source passport dataset audit and Stage 5 manifest decisions in `docs/database-analysis.md`.
-- Two checksummed SQLite migrations: V1 for normalized canonical catalogue data and V2 for separate manifest provenance, human review decisions, and materialized effective review/eligibility state.
+- Two checksummed passport-catalogue migrations remain unchanged; a separate checksummed application-database V1 creates only migration metadata and completed Examination results.
 - A deterministic transactional importer that consumes the independently validated Stage 5 manifest plus the validated Stage 10 review source, fails before mutation on stale review data, and produces a post-import validated logical catalogue fingerprint.
 - Working `SQLiteContinentRepository`, `SQLiteCountryRepository`, and `SQLitePassportRepository` implementations behind repository boundaries, with canonical `String` IDs, alternate geography, review status, aggregate entity document counts, image counts, and a prepared quiz-candidate query restricted to fully verified, known-type, quiz-eligible, non-duplicate records.
 - A non-JavaFX `CatalogueApplicationContext` that validates a read-only catalogue and wires all three SQLite repositories into `ContinentService`, `CountryService`, `PassportService`, and `QuizGenerationService`.
 - A deterministic generated schema-version-2 development catalogue at `data/passport-catalogue/passport-catalogue.sqlite`; its current ordered logical SHA-256 is `577043d6202c3666eed15ed986173a1df9e28fa566d57e5594b406ccd8a4f936`.
 - A canonical version-controlled `data/passport-review/review-decisions.tsv` source with stable entity/document/image IDs, separate review and activation records, per-target schema-version-1 SHA-256 fingerprints, strict drift validation, and a deliberately bounded Stage 10A pilot containing 4 verified entities, 12 verified documents, 12 verified images, and 12 enabled activations.
 - A non-JavaFX editorial `PassportReviewTool` supporting pending/reviewed listing, complete target inspection, single-target review decisions, explicit activation/deactivation, validation, reporting, and atomic compare-and-replace mutation without bulk approval commands.
-- Portable runtime location configuration through `passporttrainer.catalogue.path` and `passporttrainer.assets.root`, with repository-relative development defaults and image containment checks.
+- Portable runtime location configuration through `passporttrainer.catalogue.path`, `passporttrainer.assets.root`, and `passporttrainer.application.database.path`; the writable default uses `%LOCALAPPDATA%\PassportTrainer` on Windows and the XDG user-data location on Linux.
 
 ### Partially implemented
 
 - The catalogue UI browses every current record and displays effective review state; human review editing and quiz activation are intentionally confined to developer/editorial CLI tooling rather than the student-facing JavaFX application.
 - Versioned SQLite schema creation and deterministic manifest ingestion are implemented; Windows packaging of the read-only catalogue and passport assets remains a later release concern.
-- Learning remains passive and non-scored; Training and generated Examination use in-memory sessions without persistence; writable Examination results remain Stage 12C.
+- Learning remains passive and non-scored; Training and active quiz sessions remain in-memory and non-persistent; only completed Examination summaries are persisted.
 - Training immediate disclosure and Examination non-disclosure are enforced through `QuizModePolicy` and the shared coordinator/question controller.
-- Authentication, settings, statistics, authored Question Bank, and writable results have no persistence/UI implementation.
+- Authentication, users, settings, authored Question Bank/Admin, active-session persistence, and statistics UI remain unimplemented.
 - Localization infrastructure covers the implemented catalogue, interactive-map, mode-selection, Learning, Training, and generated Examination flows in the default resource bundle; additional locales are not present.
 
 ### Not implemented
 
-- Writable Examination result persistence and authored/hybrid Question Bank sources.
-- Persistent users, settings, statistics, or active quiz sessions.
+- Authored/hybrid Question Bank sources and Admin UI.
+- Persistent users, settings, active quiz sessions, and user-facing statistics.
 - Windows runtime image, installer, and Windows execution verification.
 
 ### Current architecture
@@ -237,6 +238,16 @@ Stage 12B verification established that:
 - result counts, rounded percentage and duration derive from the completed in-memory session; no `ResultRepository`, writable database, user, authored question or pass threshold was added;
 - deterministic production generation and JavaFX vertical Examination smoke pass against the unchanged read-only catalogue/assets; all 199 tests pass.
 
+Stage 12C verification established that:
+
+- `ApplicationDatabaseContext` creates a separate writable per-user SQLite database and applies only checksummed application migrations; the passport catalogue remains opened through `CatalogueApplicationContext.openReadOnly`;
+- application V1 stores canonical result/session IDs, nullable user ID, source/provenance, start/completion timestamps and correct/total counts, while incorrect count, percentage and duration remain derived;
+- runtime anonymous identity `0L` maps to SQL `NULL`; generated results retain explicit `GENERATED` source identity and optional authored-test ID/version columns support future providers without storing questions or images;
+- `SQLiteResultRepository` performs transactional writes, deterministic reads and one-row-per-session idempotency; same-fact retries return the existing row and conflicting facts fail;
+- `ExamResultService` remains the only writer, `StatisticsService` retains the shared read contract, and Training/Learning/active Examination state never writes results;
+- save failure leaves the completed session and answers intact, disables destructive navigation and exposes localized retry; an ambiguous post-commit retry remains idempotent;
+- deterministic production Examination generation completes, persists to a temporary application database, reads back canonical facts and leaves the production catalogue byte-for-byte unchanged.
+
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
@@ -270,8 +281,8 @@ Source files must remain unchanged. SQLite catalogue ingestion consumes the cano
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and its runtime flow; Stage 9 added the UI-independent quiz-generation engine; Stage 10 added editorial review/activation tooling and deterministic read-only catalogue materialization; Stage 11 added Learning, Training and Examination-ready shared lifecycle/disclosure infrastructure; Stage 12B added the complete generated Examination runtime/UI and question-source boundary without writable persistence.
+- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and runtime flow; Stage 9 added quiz generation; Stage 10 added editorial review/activation and deterministic read-only catalogue materialization; Stage 11 added shared Learning/Training/Examination lifecycle infrastructure; Stages 12B–12C completed generated Examination runtime/UI and separate completed-result persistence.
 
 ### Immediate next step
 
-Stage 12B generated Examination runtime/UI is complete. Stage 12C is the next bounded step: add a separate writable application database and `ResultRepository` implementation while retaining `ExamResultService` as sole writer and leaving the read-only passport catalogue unchanged. Users, authored Question Bank/Admin, statistics UI, active-session persistence, and Windows packaging remain later work.
+Stage 12C Examination result persistence is complete. The roadmap defines no Stage 12D scope; the next planned stage is Stage 13 users, settings, result-history/statistics UI, and their additional writable application-data migrations. Authored Question Bank/Admin, active-session persistence, and Windows packaging remain later work.

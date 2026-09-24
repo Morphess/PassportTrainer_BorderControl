@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer будується як локальний JavaFX desktop-застосунок із чітким розділенням UI, прикладної логіки й доступу до SQLite. Stage 5 реалізував read-only manifest pipeline, Stage 6 — versioned SQLite catalogue pipeline та repository implementations, Stage 7 — browse-only catalogue UI, Stage 8 — інтерактивну карту поверх тих самих canonical IDs, Stage 9 — UI-independent quiz generation engine, а Stage 10 — version-controlled human-review overlay та materialized effective catalogue state. Режими гри, quiz UI та writable user persistence належать наступним етапам.
+Passport Trainer є локальним JavaFX desktop-застосунком із розділеними UI, application logic і SQLite boundaries. Read-only manifest/catalogue/review pipelines, catalogue/map/Learning/Training UI, generated Examination runtime та окрема writable application DB для completed Examination results реалізовані. Users, authored Question Bank/Admin, active-session persistence, statistics UI та Windows packaging залишаються майбутніми етапами.
 
 ## Шари та дозволені залежності
 
@@ -171,17 +171,21 @@ Per-target fingerprint schema version 1 використовує namespace `pass
 
 `SQLiteContinentRepository`, `SQLiteCountryRepository` і `SQLitePassportRepository` розташовані в `repository.sqlite`, залежать від `DatabaseConnectionProvider`, використовують prepared statements і перетворюють `SQLException` на `RepositoryAccessException`. Вони не знають про TSV, source filesystem або JavaFX. Quiz-candidate statement виконує один bounded read із join лише потрібних entity/document/image/geography rows та вимагає `quiz_eligible=1`, три `VERIFIED` statuses, відомий `DocumentType` і відсутність document/image duplicate links.
 
+`SQLiteResultRepository` працює лише з writable application DB, transactionally inserts canonical completed-result facts і deterministic reads за result/user ID. `UNIQUE(session_id)` плюс conflict comparison гарантують at-most-one result per session: identical retry повертає existing row, а different facts fail. Repository не залежить від passport catalogue.
+
 ## Database layer
 
 `DatabaseConnectionProvider` є мінімальною межею отримання JDBC-з'єднання. `SQLiteConnectionProvider` формує `jdbc:sqlite:` URL із нормалізованого абсолютного `Path`, вмикає foreign keys для кожного connection і підтримує explicit read-only mode для runtime catalogue. Закривати connection зобов'язаний caller через try-with-resources.
 
 `SQLiteMigrationRunner` застосовує ordered SQL resources, перевіряє name і SHA-256 уже застосованої migration та відмовляється від unknown/newer schema. V1 створює normalized canonical tables. V2 додає manifest/base provenance columns, strict `review_decisions`, review-source metadata та materialized effective state; V1 не змінено. Stable manifest IDs залишаються `TEXT PRIMARY KEY`; duplicate references — self foreign keys; exact source path — portable POSIX relative text.
 
+`ApplicationDatabaseMigrationRunner` незалежно застосовує checksummed resources із `db/application-migration`, створює application schema при першому запуску та відмовляється від unknown/newer version або checksum mismatch без destructive migration. Application V1 містить лише `application_schema_migrations` і `examination_results`; catalogue migration resources не використовуються й не змінюються.
+
 `PassportCatalogueImporter` окремо валідовує `ManifestCatalogue`, читає canonical review source, перевіряє stable targets/fingerprints/activation до будь-якої database mutation, застосовує migrations і перебудовує catalogue у transaction. Manifest status/eligibility записуються в `manifest_review_status`/`manifest_quiz_eligible`; existing `review_status`/`quiz_eligible` містять effective materialized values. Decisions, review schema/count/checksum також копіюються у SQLite. Importer не сканує assets, не класифікує filenames і не змінює manifest/review source.
 
 `PassportCatalogueValidator` reconstruct-ить base review inputs із SQLite, повторно обчислює fingerprints/materialization, звіряє effective statuses/eligibility та review-source checksum і лише після цього допускає runtime. `PassportCatalogueFingerprint` включає V2 provenance, decisions і effective data, тому determinism не залежить від SQLite page layout.
 
-Reference catalogue генерується під час build/release та встановлюється як read-only application data. Versioned development artifact знаходиться в `data/passport-catalogue/passport-catalogue.sqlite`; його можна перевизначити через `passporttrainer.catalogue.path`. Review TSV і editorial tooling не потрібні packaged runtime. Майбутня writable DB для users, settings, results і statistics є окремим persistence concern: `%LOCALAPPDATA%\\PassportTrainer` на Windows і XDG user-data location на Linux.
+Reference catalogue генерується під час build/release та встановлюється як strictly read-only application data. Versioned development artifact знаходиться в `data/passport-catalogue/passport-catalogue.sqlite`; його можна перевизначити через `passporttrainer.catalogue.path`. Окрема writable application DB створюється `ApplicationDatabaseContext` за `passporttrainer.application.database.path`; default — `%LOCALAPPDATA%\PassportTrainer\passport-trainer.sqlite` на Windows і XDG user-data `passport-trainer/passport-trainer.sqlite` на Linux. Вона не має catalogue dependency.
 
 Catalogue CLI після compilation:
 
@@ -224,15 +228,15 @@ Controller не будує filesystem paths і не сканує source collecti
 | `QuestionSetProvider` / `GeneratedQuestionSetProvider` | `QuizGenerationService` у generated implementation | Повертає validated ordered `QuestionSet` з optional assessment provenance без створення runtime session; future authored/hybrid providers залишаються окремими implementations. |
 | `QuizSessionLifecycleService` | `Clock` | Одноразове приймання stable answer ID, authoritative correctness, заборона duplicate/post-completion answer та завершення лише повністю answered session. |
 | `QuizSessionCoordinator` | `QuestionSetProvider`, `QuizSessionLifecycleService`, ID/seed suppliers | Application-scoped `CREATED → ACTIVE → COMPLETED` state; coordinator-owned session identity/timestamps/answers/progression/completion, mode-safe feedback/score, retained optional provenance, restart та non-persisted abandonment. |
-| `ExamResultService` | `ResultRepository` | Єдина межа запису result: створення/збереження лише для fully answered completed `EXAMINATION`; concrete writable persistence залишається Stage 12C concern. |
+| `ExamResultService` | `ResultRepository` | Єдина межа запису result: валідовує fully answered completed `EXAMINATION`, перетворює temporary anonymous `0L` на nullable persisted user і передає canonical summary repository-ю. |
 | `QuizGenerationService` | `PassportRepository`, `Clock`, injectable seeded `RandomGenerator` factory | Незмінні eligibility/scope/question/distractor/randomization/uniqueness rules; один algorithm path повертає questions для generated provider або full session для direct Stage 9 callers. |
 | `AuthenticationService` | `UserRepository`, `PasswordHasher` | Пошук активного користувача й делегування безпечної перевірки пароля. |
-| `StatisticsService` | `ResultRepository` | Read-only result-history aggregation; Stage 12A retained the same repository contract for `ExamResultService` writes and statistics reads. |
+| `StatisticsService` | `ResultRepository` | Read-only result-history aggregation через той самий repository contract; statistics UI та persistent users ще не реалізовані. |
 | `SettingsService` | `SettingsRepository` | Читання/збереження параметрів без знання способу зберігання. |
 
-`Clock` передається в `QuizSessionLifecycleService` і `QuizGenerationService`, щоб час можна було детерміновано контролювати в тестах. `QuizGenerationService` створює рівно один random source із request seed на одну генерацію; `GeneratedQuestionSetProvider` делегує його question-only seam і не створює temporary `QuizSession`. `QuizSessionCoordinator` створює runtime session через lifecycle service, використовує injected `LongSupplier` для session ID/seed та тимчасовий anonymous user ID `0L`, який не зберігається. Controllers не будують `QuizGenerationRequest`, не визначають correctness і не знають concrete question source. Learning не використовує coordinator. Конкретний алгоритм хешування паролів навмисно не закодований в `AuthenticationService`: він буде окремою реалізацією `PasswordHasher`.
+`Clock` передається в `QuizSessionLifecycleService` і `QuizGenerationService`, щоб час детерміновано контролювався в тестах. `GeneratedQuestionSetProvider` делегує один generation path і не створює temporary `QuizSession`. `QuizSessionCoordinator` створює runtime session через lifecycle service, використовує injected session ID/seed suppliers та temporary anonymous user ID `0L`; `ExamResultService` перетворює його на persisted `NULL`. Controllers не створюють repositories/SQLite, не будують `QuizGenerationRequest` і не визначають correctness. Learning не використовує coordinator.
 
-`QuizQuestion` вимагає щонайменше два options з унікальними stable IDs, рівно одну option з `correctAnswerId` та type-specific subject/option shape. `QuizSession` вимагає непорожній набір запитань з унікальними ID, не більше однієї узгодженої відповіді на запитання, належність selected answer до options і відсутність відповідей на сторонні запитання. `QuizSessionLifecycleService` додатково не дозволяє normal completion, доки кожне питання не має відповіді. `ExamResult` гарантує `0 <= correctAnswers <= totalQuestions`, додатну кількість запитань і невід'ємну тривалість.
+`QuizQuestion` вимагає щонайменше два options з унікальними stable IDs, рівно одну correct option та type-specific shape. `QuizSession` перевіряє question/answer identity й correctness; lifecycle забороняє completion до повної відповіді. `ExamResult` зберігає canonical IDs, nullable user, assessment source/provenance, start/completion timestamps і correct/total counts; incorrect count, percentage та duration обчислюються. `AUTHORED`/`HYBRID` results вимагають immutable assessment ID/version.
 
 Для `EXAMINATION` coordinator повертає `QuizAnswerSubmissionResult.Accepted` без correctness/correct option і не показує score до `COMPLETED`; для `TRAINING` повертається authoritative `Feedback` і доступний active score. Lifecycle invariants спільні для режимів: duplicate/post-completion answers та early completion відхиляються, а `completedAt` з'являється лише після повного набору відповідей.
 
@@ -290,33 +294,33 @@ NavigationService ──► Passport List View
 
 Runtime composition:
 
-1. `ApplicationLocations` нормалізує configured catalogue/image locations;
-2. `CatalogueApplicationContext.openReadOnly` створює read-only `SQLiteConnectionProvider` і перевіряє migration version та catalogue integrity;
-3. context створює три SQLite repositories та `ContinentService`, `CountryService`, `PassportService`, `LearningService` і `QuizGenerationService`;
-4. `PassportTrainerApplication` створює `PassportImageLocator`, `QuizSessionLifecycleService`, application-scoped `QuizSessionCoordinator` та `ApplicationControllerFactory`;
-5. composition root обгортає `QuizGenerationService` у `GeneratedQuestionSetProvider` і передає provider coordinator-у; coordinator, а не provider, створює session через lifecycle service;
-6. factory окремо завантажує map resources, перевіряє hash/mappings/catalogue coverage і зберігає незалежний map availability state;
-7. `NavigationService` передає factory кожному `FXMLLoader`;
-8. factory constructor-injects лише залежності конкретного controller; Stage 12B додає Examination confirmation/result controllers і використовує shared `QuestionController` та mode-aware abandonment boundary.
+1. `ApplicationLocations` нормалізує configured catalogue/image locations і per-user writable application DB location;
+2. `ApplicationDatabaseContext.open` створює parent directory/SQLite file, застосовує application migrations та composes `SQLiteResultRepository`, `ExamResultService` і `StatisticsService`;
+3. `CatalogueApplicationContext.openReadOnly` окремо створює read-only `SQLiteConnectionProvider` і перевіряє catalogue migration version/integrity;
+4. catalogue context створює три read-only SQLite repositories та catalogue/Learning/generation services;
+5. `PassportTrainerApplication` створює image locator, lifecycle service, application-scoped coordinator і controller factory;
+6. composition root обгортає generator у `GeneratedQuestionSetProvider`; coordinator, а не provider, створює runtime session;
+7. factory окремо валідовує map resources, а `NavigationService` передає factory кожному `FXMLLoader`;
+8. factory constructor-injects `ExamResultService` лише в `ExaminationResultController`; controllers не створюють concrete persistence.
 
-Failure to open or validate catalogue creates an unavailable factory: START remains loadable and disables catalogue, map and mode actions. Failure to load or validate only map resources disables map action but preserves catalogue and Learning/Training/Examination flows. Service locator і global mutable singleton-об'єкти відсутні.
+Failure to open/migrate the application DB or open/validate the catalogue creates an unavailable factory: START remains loadable and disables catalogue, map and mode actions. Failure to load or validate only map resources disables map action but preserves catalogue and Learning/Training/Examination flows. Service locator і global mutable singleton-об'єкти відсутні.
 
 ## Тестові межі
 
 - model, service і pure presentation тести не запускають JavaFX toolkit;
 - repository integration-тести використовують лише temporary SQLite DB;
 - map loader/validator тести перевіряють XML hardening, asset integrity, exact region/entity coverage, explicit list-only records і high-risk mappings;
-- catalogue UI smoke-тести завантажують real FXML через production navigation/controller factory, перевіряють Learning, Training і complete 10-question Examination flows; mode-safe disclosure; typed start failure; result counts/percentage/duration; New Examination/Main Menu; abandonment cancel/confirm; question layouts/image safety; map/catalogue navigation; `replace` history semantics; і `resetTo` history clearing на graphical JavaFX toolkit;
+- JavaFX smoke завантажує real FXML через production navigation/controller factory і перевіряє Learning, Training, complete Examination, disclosure, abandonment, result persistence failure/retry та navigation behavior;
 - UI тести не порівнюють pixel-perfect screenshots;
-- `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model;
-- manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
-- SQLite integration tests перевіряють migrations, V1-to-V2 fail-closed behavior, foreign keys, import/review/determinism та read-only composition; generator tests використовують explicit controlled candidates; production Training smoke перевіряє readable real images і normal completion; Stage 12B production Examination smoke перевіряє provider/coordinator-owned deterministic 10-question global runtime, 4 options, all four allowed types, hidden active score і normal completion без запису catalogue.
+- `ArchitectureTest` захищає model від JavaFX imports;
+- manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє immutable source paths;
+- application SQLite integration перевіряє fresh creation, version rejection, canonical round-trip, nullable anonymous user, provenance, one-session idempotency, retry та StatisticsService reads; production Examination integration записує лише temporary application DB і звіряє незмінність catalogue bytes.
 
 ## Що навмисно не реалізовано
 
-- writable Examination result persistence і concrete production `ResultRepository`;
-- конкретний password hashing algorithm;
-- authored/hybrid Question Bank sources and JavaFX Admin editor; Stage 10 review remains a separate editorial CLI.
-- збереження активної quiz-сесії.
+- concrete password hashing algorithm;
+- users/roles, settings та statistics UI;
+- authored/hybrid Question Bank sources and JavaFX Admin editor; Stage 10 review remains a separate editorial CLI;
+- active quiz-session persistence.
 
 Ці компоненти додаються окремими етапами без порушення зафіксованого напрямку залежностей.

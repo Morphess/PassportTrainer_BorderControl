@@ -6,6 +6,8 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import ua.passporttrainer.model.AssessmentProvenance;
+import ua.passporttrainer.model.AssessmentSource;
 import ua.passporttrainer.model.ExamResult;
 import ua.passporttrainer.model.QuizAnswer;
 import ua.passporttrainer.model.QuizMode;
@@ -35,27 +37,55 @@ class ExamResultServiceTest {
 
     @Test
     void savesOnlyExaminationResults() {
-        QuizSession training = completedSession(QuizMode.TRAINING, true);
+        QuizSession training = completedSession(QuizMode.TRAINING, true, 2);
 
         assertThrows(
                 IllegalArgumentException.class,
-                () -> resultService.saveExamResult(10, training)
+                () -> resultService.saveExamResult(
+                        10, training, AssessmentSource.GENERATED, Optional.empty()
+                )
         );
         assertNull(repository.savedResult);
     }
 
     @Test
     void savesFullyAnsweredCompletedExamination() {
-        QuizSession examination = completedSession(QuizMode.EXAMINATION, true);
+        QuizSession examination = completedSession(QuizMode.EXAMINATION, true, 2);
+        AssessmentProvenance provenance = new AssessmentProvenance(
+                "assessment:future", "version:1"
+        );
 
-        ExamResult result = resultService.saveExamResult(10, examination);
+        ExamResult result = resultService.saveExamResult(
+                10, examination, AssessmentSource.AUTHORED, Optional.of(provenance)
+        );
 
         assertAll(
                 () -> assertEquals(1, result.correctAnswers()),
                 () -> assertEquals(1, result.totalQuestions()),
                 () -> assertEquals(100.0, result.scorePercent()),
                 () -> assertEquals(120, result.durationSeconds()),
+                () -> assertEquals(STARTED, result.startedAt()),
+                () -> assertEquals(COMPLETED, result.completedAt()),
+                () -> assertEquals(AssessmentSource.AUTHORED, result.assessmentSource()),
+                () -> assertEquals(Optional.of(provenance), result.assessmentProvenance()),
                 () -> assertSame(result, repository.savedResult)
+        );
+    }
+
+    @Test
+    void mapsTemporaryAnonymousIdentityToNullForGeneratedResult() {
+        QuizSession examination = completedSession(
+                QuizMode.EXAMINATION, true, QuizSessionCoordinator.ANONYMOUS_USER_ID
+        );
+
+        ExamResult result = resultService.saveExamResult(
+                10, examination, AssessmentSource.GENERATED, Optional.empty()
+        );
+
+        assertAll(
+                () -> assertNull(result.userId()),
+                () -> assertEquals(AssessmentSource.GENERATED, result.assessmentSource()),
+                () -> assertEquals(Optional.empty(), result.assessmentProvenance())
         );
     }
 
@@ -68,7 +98,9 @@ class ExamResultServiceTest {
 
         assertThrows(
                 IllegalStateException.class,
-                () -> resultService.saveExamResult(10, examination)
+                () -> resultService.saveExamResult(
+                        10, examination, AssessmentSource.GENERATED, Optional.empty()
+                )
         );
         assertNull(repository.savedResult);
     }
@@ -82,12 +114,18 @@ class ExamResultServiceTest {
 
         assertThrows(
                 IllegalStateException.class,
-                () -> resultService.saveExamResult(10, examination)
+                () -> resultService.saveExamResult(
+                        10, examination, AssessmentSource.GENERATED, Optional.empty()
+                )
         );
         assertNull(repository.savedResult);
     }
 
-    private static QuizSession completedSession(QuizMode mode, boolean correct) {
+    private static QuizSession completedSession(
+            QuizMode mode,
+            boolean correct,
+            long userId
+    ) {
         QuizQuestion question = QuizSessionLifecycleServiceTest.question(1, "entity:ukraine");
         QuizAnswer answer = new QuizAnswer(
                 1,
@@ -96,7 +134,7 @@ class ExamResultServiceTest {
                 STARTED
         );
         return new QuizSession(
-                1, 2, mode, STARTED, COMPLETED, List.of(question), List.of(answer)
+                1, userId, mode, STARTED, COMPLETED, List.of(question), List.of(answer)
         );
     }
 

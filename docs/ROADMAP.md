@@ -86,12 +86,13 @@ The roadmap preserves the established architecture and product scope. Details re
 
 ## 10. Examination mode — Stage 12
 
-- **Status:** Generated Examination runtime/UI completed in Stage 12B; writable result persistence remains Stage 12C.
+- **Status:** Generated Examination runtime/UI and completed-result persistence completed through Stage 12C.
 - **Goal:** provide a controlled examination flow and reliable result calculation.
 - **Primary result:** examination lifecycle, completion rules, scoring, and result persistence consistent with established contracts.
 - **Delivered in Stage 12A:** fixed generated policy and flow, shared-controller reuse, `QuestionSetProvider` source boundary, separate writable application-data boundary, temporary anonymous identity, and retained shared `ResultRepository` write/read contract.
 - **Delivered in Stage 12B:** enabled Examination entry and localized confirmation; fixed global 10-question/4-option generation across all four types; shared answer-key-free question UI with no immediate feedback/running score; confirmed abandonment; completion-only in-memory counts/percentage/duration; New Examination/Main Menu navigation; and generated provider wiring with coordinator-owned lifecycle.
-- **Stage 12C remaining:** add a separate writable application database and concrete `ResultRepository`, keep `ExamResultService` as sole writer, and leave passport catalogue/review/assets immutable. Authored Question Bank/Admin and users remain later work.
+- **Delivered in Stage 12C:** separate per-user writable SQLite application database and checksummed migration; transactional `SQLiteResultRepository`; nullable persisted anonymous user; generated/authored/hybrid source columns and optional immutable assessment provenance; one-result-per-session idempotency; completion-only save through `ExamResultService`; localized retry that retains completed state; and unchanged read-only passport catalogue.
+- **Stage 12D:** not currently defined; future work continues in Stage 13 and later stages.
 - **Dependencies:** the completed Stage 9 quiz engine, Stage 11 shared mode infrastructure, and Stage 10 reviewed read-only catalogue.
 
 ## 11. Users, settings and statistics — Stage 13

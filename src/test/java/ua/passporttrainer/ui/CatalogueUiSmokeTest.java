@@ -38,6 +38,7 @@ import ua.passporttrainer.image.FileSystemPassportImageLocator;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.map.WorldMapPane;
 import ua.passporttrainer.model.Country;
+import ua.passporttrainer.model.ExamResult;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
 import ua.passporttrainer.model.QuizCandidate;
@@ -49,6 +50,9 @@ import ua.passporttrainer.presentation.TrainingScopePresentation;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.repository.PassportRepository;
+import ua.passporttrainer.repository.RepositoryAccessException;
+import ua.passporttrainer.repository.ResultRepository;
+import ua.passporttrainer.service.ExamResultService;
 import ua.passporttrainer.service.ExaminationConfigurationFactory;
 import ua.passporttrainer.service.GeneratedQuestionSetProvider;
 import ua.passporttrainer.service.PassportService;
@@ -125,6 +129,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         sessionCoordinator(context),
+                        examResultService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -221,6 +226,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         sessionCoordinator(context),
+                        examResultService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -279,6 +285,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         sessionCoordinator(context),
+                        examResultService(),
                         new FileSystemPassportImageLocator(emptyAssetRoot),
                         ignored -> true,
                         RESOURCES
@@ -370,6 +377,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         sessionCoordinator(context),
+                        examResultService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -424,6 +432,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         sessionCoordinator(context),
+                        examResultService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -526,6 +535,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         sessionCoordinator(context),
+                        examResultService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -648,6 +658,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         sessionCoordinator(context),
+                        examResultService(),
                         new FileSystemPassportImageLocator(temporaryDirectory),
                         ignored -> true,
                         resourcesWithoutMapGroupLabel()
@@ -718,6 +729,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         coordinator,
+                        examResultService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -820,6 +832,7 @@ class CatalogueUiSmokeTest {
                         ApplicationControllerFactory.available(
                                 context,
                                 sessionCoordinator(context),
+                                examResultService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -968,6 +981,7 @@ class CatalogueUiSmokeTest {
         CatalogueTestSupport.importCatalogue(database);
         CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
         QuizSessionCoordinator coordinator = sessionCoordinator(context);
+        TestResultRepository resultRepository = new TestResultRepository(true);
         AtomicReference<Stage> stageReference = new AtomicReference<>();
         AtomicReference<NavigationService> navigationReference = new AtomicReference<>();
         AtomicReference<Parent> questionRootReference = new AtomicReference<>();
@@ -978,6 +992,7 @@ class CatalogueUiSmokeTest {
             ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                     context,
                     coordinator,
+                    new ExamResultService(resultRepository),
                     new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                     ignored -> true,
                     RESOURCES
@@ -1031,6 +1046,7 @@ class CatalogueUiSmokeTest {
                         option.getStyleClass().contains("correct-answer")
                                 || option.getStyleClass().contains("incorrect-answer")
                 ));
+                assertEquals(0, resultRepository.saveAttempts);
                 control(questionRoot, "#nextButton", Button.class).fire();
                 if (questionIndex < 9) {
                     assertSame(questionRoot, stageReference.get().getScene().getRoot());
@@ -1055,6 +1071,25 @@ class CatalogueUiSmokeTest {
             assertEquals("100%", control(resultRoot, "#percentageLabel", Label.class).getText());
             assertEquals("0 с", control(resultRoot, "#durationLabel", Label.class).getText());
             assertEquals(QuizSessionLifecycle.COMPLETED, coordinator.lifecycle().orElseThrow());
+            Button mainMenuButton = control(resultRoot, "#mainMenuButton", Button.class);
+            Button retrySaveButton = control(resultRoot, "#retrySaveButton", Button.class);
+            assertTrue(mainMenuButton.isDisabled());
+            assertTrue(retrySaveButton.isVisible());
+            assertTrue(retrySaveButton.isManaged());
+            assertEquals(
+                    RESOURCES.getString("examination.result.saveFailure"),
+                    control(resultRoot, "#persistenceStatusLabel", Label.class).getText()
+            );
+            assertEquals(10, coordinator.session().orElseThrow().answers().size());
+            retrySaveButton.fire();
+            assertFalse(mainMenuButton.isDisabled());
+            assertFalse(retrySaveButton.isVisible());
+            assertEquals(
+                    RESOURCES.getString("examination.result.saveSuccess"),
+                    control(resultRoot, "#persistenceStatusLabel", Label.class).getText()
+            );
+            assertEquals(2, resultRepository.saveAttempts);
+            assertEquals(coordinator.session().orElseThrow().id(), resultRepository.result.id());
             control(resultRoot, "#mainMenuButton", Button.class).fire();
 
             Parent resetRoot = stage.getScene().getRoot();
@@ -1084,6 +1119,7 @@ class CatalogueUiSmokeTest {
                     ApplicationControllerFactory.available(
                             context,
                             coordinator,
+                            examResultService(),
                             new FileSystemPassportImageLocator(
                                     Path.of("Зразки паспортних документів")
                             ),
@@ -1156,6 +1192,7 @@ class CatalogueUiSmokeTest {
                         ApplicationControllerFactory.available(
                                 context,
                                 coordinator,
+                                examResultService(),
                                 new FileSystemPassportImageLocator(
                                         Path.of("Зразки паспортних документів")
                                 ),
@@ -1211,6 +1248,7 @@ class CatalogueUiSmokeTest {
                         ApplicationControllerFactory.available(
                                 context,
                                 coordinator,
+                                examResultService(),
                                 new FileSystemPassportImageLocator(
                                         Path.of("Зразки паспортних документів")
                                 ),
@@ -1439,6 +1477,7 @@ class CatalogueUiSmokeTest {
                 ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                         context,
                         coordinator,
+                        examResultService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -1548,6 +1587,7 @@ class CatalogueUiSmokeTest {
                         ApplicationControllerFactory.available(
                                 context,
                                 sessionCoordinator(context),
+                                examResultService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1582,6 +1622,7 @@ class CatalogueUiSmokeTest {
                         ApplicationControllerFactory.available(
                                 context,
                                 sessionCoordinator(context),
+                                examResultService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1620,6 +1661,7 @@ class CatalogueUiSmokeTest {
                         ApplicationControllerFactory.available(
                                 context,
                                 sessionCoordinator(context),
+                                examResultService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1649,6 +1691,7 @@ class CatalogueUiSmokeTest {
         ApplicationControllerFactory factory = ApplicationControllerFactory.available(
                 context,
                 coordinator,
+                examResultService(),
                 imageLocator,
                 abandonmentConfirmation,
                 RESOURCES
@@ -1730,6 +1773,49 @@ class CatalogueUiSmokeTest {
                 seeds::getAndIncrement
         );
     }
+
+    private static ExamResultService examResultService() {
+        return new ExamResultService(new TestResultRepository(false));
+    }
+
+    private static final class TestResultRepository implements ResultRepository {
+
+        private boolean failNextSave;
+        private ExamResult result;
+        private int saveAttempts;
+
+        private TestResultRepository(boolean failNextSave) {
+            this.failNextSave = failNextSave;
+        }
+
+        @Override
+        public ExamResult save(ExamResult candidate) {
+            saveAttempts++;
+            if (failNextSave) {
+                failNextSave = false;
+                throw new RepositoryAccessException("Simulated result save failure");
+            }
+            if (result == null) {
+                result = candidate;
+            }
+            return result;
+        }
+
+        @Override
+        public Optional<ExamResult> findById(long id) {
+            return result != null && result.id() == id
+                    ? Optional.of(result)
+                    : Optional.empty();
+        }
+
+        @Override
+        public List<ExamResult> findByUserId(long userId) {
+            return result != null && result.userId() != null && result.userId() == userId
+                    ? List.of(result)
+                    : List.of();
+        }
+    }
+
     private static PassportRepository emptyPassportRepository() {
         return new PassportRepository() {
             @Override

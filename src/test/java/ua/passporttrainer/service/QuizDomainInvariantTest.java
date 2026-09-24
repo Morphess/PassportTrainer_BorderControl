@@ -4,8 +4,10 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import ua.passporttrainer.model.AssessmentSource;
 import ua.passporttrainer.model.DocumentType;
 import ua.passporttrainer.model.ExamResult;
 import ua.passporttrainer.model.QuizAnswer;
@@ -183,23 +185,45 @@ class QuizDomainInvariantTest {
         assertAll(
                 () -> assertThrows(
                         IllegalArgumentException.class,
-                        () -> new ExamResult(1, 2, 3, -1, 1, 0, NOW)
+                        () -> new ExamResult(
+                                1, null, 3, AssessmentSource.GENERATED, Optional.empty(),
+                                NOW, NOW, -1, 1
+                        )
                 ),
                 () -> assertThrows(
                         IllegalArgumentException.class,
-                        () -> new ExamResult(1, 2, 3, 2, 1, 0, NOW)
+                        () -> new ExamResult(
+                                1, null, 3, AssessmentSource.GENERATED, Optional.empty(),
+                                NOW, NOW, 2, 1
+                        )
                 ),
                 () -> assertThrows(
                         IllegalArgumentException.class,
-                        () -> new ExamResult(1, 2, 3, 0, 0, 0, NOW)
+                        () -> new ExamResult(
+                                1, null, 3, AssessmentSource.GENERATED, Optional.empty(),
+                                NOW, NOW, 0, 0
+                        )
                 ),
                 () -> assertThrows(
                         IllegalArgumentException.class,
-                        () -> new ExamResult(1, 2, 3, 0, 1, -1, NOW)
+                        () -> new ExamResult(
+                                1, 0L, 3, AssessmentSource.GENERATED, Optional.empty(),
+                                NOW, NOW, 0, 1
+                        )
+                ),
+                () -> assertThrows(
+                        IllegalArgumentException.class,
+                        () -> new ExamResult(
+                                1, null, 3, AssessmentSource.AUTHORED, Optional.empty(),
+                                NOW, NOW, 0, 1
+                        )
                 ),
                 () -> assertThrows(
                         NullPointerException.class,
-                        () -> new ExamResult(1, 2, 3, 0, 1, 0, null)
+                        () -> new ExamResult(
+                                1, null, 3, AssessmentSource.GENERATED, Optional.empty(),
+                                null, NOW, 0, 1
+                        )
                 )
         );
     }

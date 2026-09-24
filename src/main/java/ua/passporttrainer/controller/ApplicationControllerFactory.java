@@ -11,8 +11,9 @@ import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.presentation.QuestionPresentationMapper;
 import ua.passporttrainer.presentation.QuizGenerationFailureFormatter;
-import ua.passporttrainer.service.QuizSessionCoordinator;
+import ua.passporttrainer.service.ExamResultService;
 import ua.passporttrainer.service.ExaminationConfigurationFactory;
+import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.TrainingConfigurationFactory;
 
 import java.util.Objects;
@@ -23,6 +24,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
 
     private final CatalogueApplicationContext catalogueContext;
     private final QuizSessionCoordinator sessionCoordinator;
+    private final ExamResultService examResultService;
     private final Throwable catalogueFailure;
     private final WorldMapDefinition mapDefinition;
     private final ResourceBundle regionLabels;
@@ -39,6 +41,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     private ApplicationControllerFactory(
             CatalogueApplicationContext catalogueContext,
             QuizSessionCoordinator sessionCoordinator,
+            ExamResultService examResultService,
             Throwable catalogueFailure,
             WorldMapDefinition mapDefinition,
             ResourceBundle regionLabels,
@@ -49,6 +52,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     ) {
         this.catalogueContext = catalogueContext;
         this.sessionCoordinator = sessionCoordinator;
+        this.examResultService = examResultService;
         this.catalogueFailure = catalogueFailure;
         this.mapDefinition = mapDefinition;
         this.regionLabels = regionLabels;
@@ -70,12 +74,14 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     public static ApplicationControllerFactory available(
             CatalogueApplicationContext catalogueContext,
             QuizSessionCoordinator sessionCoordinator,
+            ExamResultService examResultService,
             PassportImageLocator imageLocator,
             SessionAbandonmentConfirmation abandonmentConfirmation,
             ResourceBundle resources
     ) {
         Objects.requireNonNull(catalogueContext, "catalogueContext");
         Objects.requireNonNull(sessionCoordinator, "sessionCoordinator");
+        Objects.requireNonNull(examResultService, "examResultService");
         Objects.requireNonNull(abandonmentConfirmation, "abandonmentConfirmation");
         WorldMapDefinition mapDefinition = null;
         ResourceBundle regionLabels = null;
@@ -94,7 +100,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
             mapFailure = exception;
         }
         return new ApplicationControllerFactory(
-                catalogueContext, sessionCoordinator, null,
+                catalogueContext, sessionCoordinator, examResultService, null,
                 mapDefinition, regionLabels, mapFailure, imageLocator,
                 abandonmentConfirmation, resources
         );
@@ -107,7 +113,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     ) {
         Throwable failure = Objects.requireNonNull(catalogueFailure, "catalogueFailure");
         return new ApplicationControllerFactory(
-                null, null, failure, null, null, failure, imageLocator, null, resources
+                null, null, null, failure, null, null, failure, imageLocator, null, resources
         );
     }
 
@@ -175,7 +181,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
         }
         if (controllerType == ExaminationResultController.class) {
             return new ExaminationResultController(
-                    navigationService, sessionCoordinator, resources
+                    navigationService, sessionCoordinator, examResultService, resources
             );
         }
         if (controllerType == WorldMapController.class) {

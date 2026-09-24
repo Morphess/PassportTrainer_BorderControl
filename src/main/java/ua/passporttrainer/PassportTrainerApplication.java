@@ -1,5 +1,6 @@
 package ua.passporttrainer;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.util.ResourceBundle;
@@ -11,6 +12,7 @@ import javafx.stage.Stage;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
 import ua.passporttrainer.controller.ApplicationControllerFactory;
 import ua.passporttrainer.controller.JavaFxSessionAbandonmentConfirmation;
+import ua.passporttrainer.database.ApplicationDatabaseContext;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.navigation.NavigationService;
@@ -32,10 +34,12 @@ public final class PassportTrainerApplication extends Application {
         PassportImageLocator imageLocator = new FileSystemPassportImageLocator(locations.passportAssetsRoot());
         ApplicationControllerFactory controllerFactory;
         try {
+            ApplicationDatabaseContext applicationDatabaseContext =
+                    ApplicationDatabaseContext.open(locations.applicationDatabasePath());
             CatalogueApplicationContext catalogueContext =
                     CatalogueApplicationContext.openReadOnly(locations.cataloguePath());
             Clock sessionClock = Clock.systemUTC();
-            AtomicLong sessionIds = new AtomicLong();
+            AtomicLong sessionIds = new AtomicLong(System.currentTimeMillis());
             SplittableRandom sessionSeeds = new SplittableRandom();
             QuizSessionCoordinator sessionCoordinator = new QuizSessionCoordinator(
                     new GeneratedQuestionSetProvider(catalogueContext.quizGenerationService()),
@@ -46,12 +50,15 @@ public final class PassportTrainerApplication extends Application {
             controllerFactory = ApplicationControllerFactory.available(
                     catalogueContext,
                     sessionCoordinator,
+                    applicationDatabaseContext.examResultService(),
                     imageLocator,
                     new JavaFxSessionAbandonmentConfirmation(messages),
                     messages
             );
-        } catch (SQLException | RuntimeException exception) {
-            controllerFactory = ApplicationControllerFactory.unavailable(exception, imageLocator, messages);
+        } catch (IOException | SQLException | RuntimeException exception) {
+            controllerFactory = ApplicationControllerFactory.unavailable(
+                    exception, imageLocator, messages
+            );
         }
         NavigationService navigationService = new NavigationService(primaryStage, messages, controllerFactory);
 
