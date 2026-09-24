@@ -24,6 +24,11 @@ public final class ModeSelectionController {
     private void openTraining() {
         navigationService.show(View.TRAINING_CONFIGURATION);
     }
+    @FXML
+    private void openExamination() {
+        navigationService.show(View.EXAMINATION_CONFIRMATION);
+    }
+
 
     @FXML
     private void goBack() {

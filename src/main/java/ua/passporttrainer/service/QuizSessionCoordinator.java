@@ -6,8 +6,10 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.function.LongSupplier;
 
+import ua.passporttrainer.model.AssessmentProvenance;
 import ua.passporttrainer.model.QuizAnswer;
 import ua.passporttrainer.model.QuizGenerationRequest;
+import ua.passporttrainer.model.QuestionSet;
 import ua.passporttrainer.model.QuizQuestion;
 import ua.passporttrainer.model.QuizSession;
 import ua.passporttrainer.model.QuizSessionConfiguration;
@@ -19,7 +21,7 @@ public final class QuizSessionCoordinator {
     /** Temporary identity for non-persisted sessions before local user accounts exist. */
     public static final long ANONYMOUS_USER_ID = 0L;
 
-    private final QuizGenerationService generationService;
+    private final QuestionSetProvider questionSetProvider;
     private final QuizSessionLifecycleService lifecycleService;
     private final LongSupplier sessionIdSupplier;
     private final LongSupplier randomSeedSupplier;
@@ -29,14 +31,15 @@ public final class QuizSessionCoordinator {
     private QuizSession session;
     private int currentQuestionIndex = -1;
     private Long randomSeed;
+    private AssessmentProvenance assessmentProvenance;
 
     public QuizSessionCoordinator(
-            QuizGenerationService generationService,
+            QuestionSetProvider questionSetProvider,
             QuizSessionLifecycleService lifecycleService,
             LongSupplier sessionIdSupplier,
             LongSupplier randomSeedSupplier
     ) {
-        this.generationService = Objects.requireNonNull(generationService, "generationService");
+        this.questionSetProvider = Objects.requireNonNull(questionSetProvider, "questionSetProvider");
         this.lifecycleService = Objects.requireNonNull(lifecycleService, "lifecycleService");
         this.sessionIdSupplier = Objects.requireNonNull(sessionIdSupplier, "sessionIdSupplier");
         this.randomSeedSupplier = Objects.requireNonNull(randomSeedSupplier, "randomSeedSupplier");
@@ -69,13 +72,20 @@ public final class QuizSessionCoordinator {
                 seed
         );
 
-        QuizSession generated = generationService.generate(request);
-        validateGeneratedSession(generated, request);
-        session = generated;
+        QuestionSet questionSet = questionSetProvider.provide(request);
+        validateQuestionSet(questionSet, request);
+        QuizSession started = lifecycleService.startSession(
+                sessionId,
+                ANONYMOUS_USER_ID,
+                configuration.mode(),
+                questionSet.questions()
+        );
+        session = started;
         currentQuestionIndex = 0;
         randomSeed = seed;
+        assessmentProvenance = questionSet.assessmentProvenance().orElse(null);
         lifecycle = QuizSessionLifecycle.ACTIVE;
-        return generated;
+        return started;
     }
 
     public QuizAnswerSubmissionResult submitAnswer(String selectedAnswerId) {
@@ -205,6 +215,10 @@ public final class QuizSessionCoordinator {
         return randomSeed == null ? OptionalLong.empty() : OptionalLong.of(randomSeed);
     }
 
+    public Optional<AssessmentProvenance> assessmentProvenance() {
+        return Optional.ofNullable(assessmentProvenance);
+    }
+
     private QuizSession requireActiveSession() {
         requireLifecycle(QuizSessionLifecycle.ACTIVE);
         return session;
@@ -220,20 +234,16 @@ public final class QuizSessionCoordinator {
         session = null;
         currentQuestionIndex = -1;
         randomSeed = null;
+        assessmentProvenance = null;
     }
 
-    private static void validateGeneratedSession(
-            QuizSession generated,
+    private static void validateQuestionSet(
+            QuestionSet questionSet,
             QuizGenerationRequest request
     ) {
-        Objects.requireNonNull(generated, "generated session");
-        if (generated.completed()
-                || !generated.answers().isEmpty()
-                || generated.id() != request.sessionId()
-                || generated.userId() != request.userId()
-                || generated.mode() != request.mode()
-                || generated.questions().size() != request.questionCount()) {
-            throw new IllegalStateException("Quiz generator returned an incompatible session");
+        Objects.requireNonNull(questionSet, "questionSet");
+        if (questionSet.questions().size() != request.questionCount()) {
+            throw new IllegalStateException("Question provider returned an incompatible set");
         }
     }
 }

@@ -10,12 +10,13 @@ import javafx.application.Application;
 import javafx.stage.Stage;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
 import ua.passporttrainer.controller.ApplicationControllerFactory;
-import ua.passporttrainer.controller.JavaFxTrainingAbandonmentConfirmation;
+import ua.passporttrainer.controller.JavaFxSessionAbandonmentConfirmation;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.runtime.ApplicationLocations;
+import ua.passporttrainer.service.GeneratedQuestionSetProvider;
 import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.QuizSessionLifecycleService;
 
@@ -37,7 +38,7 @@ public final class PassportTrainerApplication extends Application {
             AtomicLong sessionIds = new AtomicLong();
             SplittableRandom sessionSeeds = new SplittableRandom();
             QuizSessionCoordinator sessionCoordinator = new QuizSessionCoordinator(
-                    catalogueContext.quizGenerationService(),
+                    new GeneratedQuestionSetProvider(catalogueContext.quizGenerationService()),
                     new QuizSessionLifecycleService(sessionClock),
                     sessionIds::incrementAndGet,
                     sessionSeeds::nextLong
@@ -46,7 +47,7 @@ public final class PassportTrainerApplication extends Application {
                     catalogueContext,
                     sessionCoordinator,
                     imageLocator,
-                    new JavaFxTrainingAbandonmentConfirmation(messages),
+                    new JavaFxSessionAbandonmentConfirmation(messages),
                     messages
             );
         } catch (SQLException | RuntimeException exception) {

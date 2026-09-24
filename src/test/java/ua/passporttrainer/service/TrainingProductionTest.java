@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import org.junit.jupiter.api.Test;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
+import ua.passporttrainer.service.GeneratedQuestionSetProvider;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
 import ua.passporttrainer.model.QuizContent;
 import ua.passporttrainer.model.QuizMode;
@@ -40,7 +41,7 @@ class TrainingProductionTest {
         AtomicLong sessionIds = new AtomicLong(500L);
         AtomicLong seeds = new AtomicLong(20260923L);
         QuizSessionCoordinator coordinator = new QuizSessionCoordinator(
-                context.quizGenerationService(),
+                new GeneratedQuestionSetProvider(context.quizGenerationService()),
                 new QuizSessionLifecycleService(CLOCK),
                 sessionIds::getAndIncrement,
                 seeds::getAndIncrement

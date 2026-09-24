@@ -19,6 +19,7 @@ import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
+import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
@@ -30,14 +31,14 @@ import ua.passporttrainer.service.QuizAnswerSubmissionResult;
 import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.QuizSessionProgress;
 
-/** Presents and advances one coordinator-owned Training session without grading answers. */
+/** Presents and advances one coordinator-owned quiz session without grading answers. */
 public final class QuestionController {
 
     private final NavigationService navigationService;
     private final QuizSessionCoordinator sessionCoordinator;
     private final QuestionPresentationMapper presentationMapper;
     private final PassportImageLocator imageLocator;
-    private final TrainingAbandonmentConfirmation abandonmentConfirmation;
+    private final SessionAbandonmentConfirmation abandonmentConfirmation;
     private final ResourceBundle resources;
 
     private final ToggleGroup optionGroup = new ToggleGroup();
@@ -47,6 +48,7 @@ public final class QuestionController {
     private boolean imageFailure;
     private int pendingImages;
     private long imageLoadVersion;
+    private QuizMode mode;
 
     @FXML
     private Label progressLabel;
@@ -78,7 +80,7 @@ public final class QuestionController {
             QuizSessionCoordinator sessionCoordinator,
             QuestionPresentationMapper presentationMapper,
             PassportImageLocator imageLocator,
-            TrainingAbandonmentConfirmation abandonmentConfirmation,
+            SessionAbandonmentConfirmation abandonmentConfirmation,
             ResourceBundle resources
     ) {
         this.navigationService = Objects.requireNonNull(navigationService, "navigationService");
@@ -105,6 +107,14 @@ public final class QuestionController {
         Objects.requireNonNull(imageOptionsGrid, "imageOptionsGrid was not injected");
         Objects.requireNonNull(submitButton, "submitButton was not injected");
         Objects.requireNonNull(nextButton, "nextButton was not injected");
+        mode = sessionCoordinator.session().orElseThrow(
+                () -> new IllegalStateException("Question view requires an active session")
+        ).mode();
+        if (mode == QuizMode.LEARNING) {
+            throw new IllegalStateException("Learning does not use the question view");
+        }
+        submitButton.setText(resources.getString(modeKey("submit")));
+
 
         subjectImageView.setAccessibleText(resources.getString("question.imageSubjectAccessible"));
         optionGroup.selectedToggleProperty().addListener((observable, previous, current) -> updateSubmitState());
@@ -121,17 +131,16 @@ public final class QuestionController {
         try {
             result = sessionCoordinator.submitAnswer(selectedOptionId);
         } catch (IllegalArgumentException | IllegalStateException failure) {
-            setError(resources.getString("training.answerRejected"));
+            setError(resources.getString(modeKey("answerRejected")));
             return;
-        }
-        if (!(result instanceof QuizAnswerSubmissionResult.Feedback feedback)) {
-            throw new IllegalStateException("Training submission did not disclose mode-safe feedback");
         }
 
         answerSubmitted = true;
-        completionReady = feedback.completionReady();
+        completionReady = result.completionReady();
         optionControls.values().forEach(control -> control.setDisable(true));
-        showFeedback(feedback);
+        if (result instanceof QuizAnswerSubmissionResult.Feedback feedback) {
+            showFeedback(feedback);
+        }
         submitButton.setDisable(true);
         nextButton.setDisable(false);
     }
@@ -143,7 +152,13 @@ public final class QuestionController {
         }
         if (completionReady) {
             sessionCoordinator.complete();
-            navigationService.replace(View.TRAINING_RESULT);
+            navigationService.replace(switch (mode) {
+                case TRAINING -> View.TRAINING_RESULT;
+                case EXAMINATION -> View.EXAMINATION_RESULT;
+                case LEARNING -> throw new IllegalStateException(
+                        "Learning does not use the question view"
+                );
+            });
             return;
         }
         sessionCoordinator.advance();
@@ -152,7 +167,7 @@ public final class QuestionController {
 
     @FXML
     private void requestBack() {
-        if (!abandonmentConfirmation.confirmAbandonment()) {
+        if (!abandonmentConfirmation.confirmAbandonment(mode)) {
             return;
         }
         sessionCoordinator.abandon();
@@ -181,15 +196,15 @@ public final class QuestionController {
         QuestionPresentation presentation = presentationMapper.map(sessionCoordinator.currentQuestion());
         QuizSessionProgress progress = sessionCoordinator.progress();
         progressLabel.setText(MessageFormat.format(
-                resources.getString("training.progress"),
+                resources.getString(modeKey("progress")),
                 progress.currentQuestionNumber(),
                 progress.totalQuestions()
         ));
         promptLabel.setText(presentation.prompt());
         nextButton.setText(resources.getString(
                 progress.currentQuestionNumber() == progress.totalQuestions()
-                        ? "training.finish"
-                        : "training.next"
+                        ? modeKey("finish")
+                        : modeKey("next")
         ));
 
         if (presentation.layout() == QuestionLayoutKind.IMAGE_SUBJECT_TEXT_OPTIONS) {
@@ -325,7 +340,7 @@ public final class QuestionController {
         pendingImages--;
         if (failed) {
             imageFailure = true;
-            setError(resources.getString("training.imageUnavailable"));
+            setError(resources.getString(modeKey("imageUnavailable")));
         }
         updateSubmitState();
     }
@@ -364,6 +379,17 @@ public final class QuestionController {
         boolean visible = message != null && !message.isBlank();
         errorLabel.setText(visible ? message : "");
         setVisible(errorLabel, visible);
+    }
+
+    private String modeKey(String suffix) {
+        String prefix = switch (mode) {
+            case TRAINING -> "training";
+            case EXAMINATION -> "examination";
+            case LEARNING -> throw new IllegalStateException(
+                    "Learning does not use the question view"
+            );
+        };
+        return prefix + '.' + suffix;
     }
 
     private static void hide(Label label) {

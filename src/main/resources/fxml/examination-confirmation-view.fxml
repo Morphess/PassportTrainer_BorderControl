@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/25"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="ua.passporttrainer.controller.ExaminationConfirmationController"
+            styleClass="screen-root">
+    <padding>
+        <Insets top="28.0" right="28.0" bottom="28.0" left="28.0" />
+    </padding>
+    <top>
+        <VBox alignment="CENTER" spacing="8.0">
+            <Label styleClass="screen-title" text="%examination.confirmation.title" />
+            <Label styleClass="support-label" text="%examination.confirmation.description" wrapText="true" />
+        </VBox>
+    </top>
+    <center>
+        <VBox alignment="CENTER" maxWidth="650.0" spacing="18.0" styleClass="content-panel">
+            <GridPane alignment="CENTER" hgap="24.0" vgap="14.0">
+                <Label styleClass="section-title" text="%examination.confirmation.questionCount" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+                <Label fx:id="questionCountLabel" styleClass="result-value" text="10" GridPane.columnIndex="1" GridPane.rowIndex="0" />
+                <Label styleClass="section-title" text="%examination.confirmation.optionCount" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                <Label fx:id="optionCountLabel" styleClass="result-value" text="4" GridPane.columnIndex="1" GridPane.rowIndex="1" />
+            </GridPane>
+            <Label fx:id="feedbackPolicyLabel" styleClass="support-label"
+                   text="%examination.confirmation.feedbackPolicy" textAlignment="CENTER" wrapText="true" />
+            <Label fx:id="errorLabel" styleClass="error-label" wrapText="true" />
+        </VBox>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER" spacing="12.0">
+            <Button fx:id="backButton" onAction="#goBack" text="%common.back" />
+            <Button fx:id="startExaminationButton" defaultButton="true" onAction="#startExamination"
+                    styleClass="primary-button" text="%examination.start" />
+        </HBox>
+    </bottom>
+</BorderPane>

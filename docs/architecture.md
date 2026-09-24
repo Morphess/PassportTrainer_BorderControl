@@ -47,7 +47,7 @@ Model ──► only Java/JDK types (never JavaFX)
 
 ### `PassportTrainerApplication`
 
-JavaFX composition root. Він визначає runtime locations, відкриває й перевіряє read-only `CatalogueApplicationContext`, створює `PassportImageLocator`, application-scoped `QuizSessionCoordinator`, explicit `ApplicationControllerFactory` та `NavigationService`, задає параметри головного `Stage` і відкриває START. Catalogue context створює `LearningService` з того самого `PassportRepository`, що використовується quiz generation; окремого eligibility query або repository немає. Coordinator використовує `QuizGenerationService`, окремий `QuizSessionLifecycleService` та application-owned suppliers для non-persisted session IDs/seeds; Training використовує coordinator, а Learning залишається passive. Factory окремо завантажує та перевіряє map resources; помилка карти вимикає лише map action, а catalogue fallback залишається доступним. Якщо catalogue не відкривається або не проходить integrity validation, START залишається працездатним і вимикає catalogue, map і mode entry.
+JavaFX composition root. Він визначає runtime locations, відкриває й перевіряє read-only `CatalogueApplicationContext`, створює `PassportImageLocator`, `GeneratedQuestionSetProvider`, один application-scoped `QuizSessionCoordinator`, explicit `ApplicationControllerFactory` та `NavigationService`, задає параметри головного `Stage` і відкриває START. Catalogue context створює `LearningService` і `QuizGenerationService` з того самого `PassportRepository`; окремого eligibility query або repository немає. Coordinator отримує питання через provider, а `QuizSessionLifecycleService` і application-owned suppliers залишають coordinator власником non-persisted session identity, timestamps, answers, progression і completion для Training та Examination; Learning залишається passive. Factory окремо завантажує та перевіряє map resources; помилка карти вимикає лише map action, а catalogue fallback залишається доступним. Якщо catalogue не відкривається або не проходить integrity validation, START залишається працездатним і вимикає catalogue, map і mode entry.
 
 ### `NavigationService`
 
@@ -74,12 +74,14 @@ JavaFX composition root. Він визначає runtime locations, відкри
 - `WorldMapController` адаптує validated map definition і `WorldMapCatalogue` до native JavaFX map, continent shortcuts, fallback list та наявного переходу до паспортів;
 - `PassportListController` відображає всі документи одного entity;
 - `PassportDetailsController` показує metadata, image loading/error state та керування послідовністю зображень.
-- `ModeSelectionController` відкриває реалізовані Learning і Training та залишає Examination явно недоступним без dead route;
+- `ModeSelectionController` відкриває реалізовані Learning, Training і generated Examination flows;
 - `LearningEntitySelectionController` показує окремий deterministic список лише entities з eligible Learning material;
 - `LearningBrowserController` показує локалізовані metadata та safe images, керує лише Previous/Next view state, не створює session/answers/score і передає canonical entity ID до Training configuration;
 - `TrainingConfigurationController` керує лише accepted controls, делегує immutable configuration `TrainingConfigurationFactory`, запускає session через application-scoped coordinator і показує localized typed generation failures;
-- `QuestionController` відображає JavaFX-independent question presentation, безпечно завантажує потрібні images, надсилає stable option ID coordinator-у та відображає лише authoritative feedback;
-- `TrainingResultController` відображає completed in-memory summary і делегує restart, new-configuration та main-menu lifecycle/navigation actions.
+- `ExaminationConfirmationController` показує fixed 10-question/4-option/global policy, запускає рівно одну generated Examination session і залишає екран на typed failure;
+- shared `QuestionController` відображає JavaFX-independent answer-key-free presentation, безпечно завантажує images, надсилає stable option ID coordinator-у, показує `Feedback` лише для Training і не розкриває correctness для Examination;
+- `TrainingResultController` відображає completed in-memory Training summary і делегує restart, new-configuration та main-menu actions;
+- `ExaminationResultController` вимагає completed Examination, показує in-memory correct/incorrect/total/percentage/duration і делегує New Examination/Main Menu без persistence.
 
 `ApplicationControllerFactory` явно створює лише підтримувані controller types і передає `NavigationService`, вузькі сервіси, image locator, validated map definition та `ResourceBundle` через constructors. Це єдиний FXML controller factory; DI framework, service locator, controller SQL/TSV/filesystem scanning і загальний `MainController` не використовуються.
 
@@ -218,15 +220,17 @@ Controller не будує filesystem paths і не сканує source collecti
 | `PassportService` | `PassportRepository` | Усі документи entity та їх зображення. |
 | `LearningService` | `PassportRepository` | Deterministic passive Learning projections лише з `findQuizEligibleCandidates()`, додаткова перевірка `QuizCandidate.usable()`, canonical-document deduplication та entity filtering без session/score/persistence. |
 | `TrainingConfigurationFactory` | немає infrastructure dependencies | Перетворення прийнятих Training controls на immutable `QuizSessionConfiguration` з fixed option count 4 без дублювання generation rules. |
+| `ExaminationConfigurationFactory` | немає infrastructure dependencies | Створює fixed generated Examination configuration: 10 questions, 4 options, all four types, global scope. |
+| `QuestionSetProvider` / `GeneratedQuestionSetProvider` | `QuizGenerationService` у generated implementation | Повертає validated ordered `QuestionSet` з optional assessment provenance без створення runtime session; future authored/hybrid providers залишаються окремими implementations. |
 | `QuizSessionLifecycleService` | `Clock` | Одноразове приймання stable answer ID, authoritative correctness, заборона duplicate/post-completion answer та завершення лише повністю answered session. |
-| `QuizSessionCoordinator` | `QuizGenerationService`, `QuizSessionLifecycleService`, ID/seed suppliers | Application-scoped `CREATED → ACTIVE → COMPLETED` state, один generation call, current index, progress/score, mode-safe feedback, restart та non-persisted abandonment. |
-| `ExamResultService` | `ResultRepository` | Єдина межа запису result: створення/збереження лише для fully answered completed `EXAMINATION`; concrete writable persistence залишається Stage 12/13 concern. |
-| `QuizGenerationService` | `PassportRepository`, `Clock`, injectable seeded `RandomGenerator` factory | Eligibility defense, request scopes, question/distractor strategies, randomization, uniqueness і створення повної `QuizSession` або structured failure. |
+| `QuizSessionCoordinator` | `QuestionSetProvider`, `QuizSessionLifecycleService`, ID/seed suppliers | Application-scoped `CREATED → ACTIVE → COMPLETED` state; coordinator-owned session identity/timestamps/answers/progression/completion, mode-safe feedback/score, retained optional provenance, restart та non-persisted abandonment. |
+| `ExamResultService` | `ResultRepository` | Єдина межа запису result: створення/збереження лише для fully answered completed `EXAMINATION`; concrete writable persistence залишається Stage 12C concern. |
+| `QuizGenerationService` | `PassportRepository`, `Clock`, injectable seeded `RandomGenerator` factory | Незмінні eligibility/scope/question/distractor/randomization/uniqueness rules; один algorithm path повертає questions для generated provider або full session для direct Stage 9 callers. |
 | `AuthenticationService` | `UserRepository`, `PasswordHasher` | Пошук активного користувача й делегування безпечної перевірки пароля. |
-| `StatisticsService` | `ResultRepository` | Read-only використання result history для базового агрегування; Stage 12/13 має явно зберегти shared contract або розділити command/query repository boundaries. |
+| `StatisticsService` | `ResultRepository` | Read-only result-history aggregation; Stage 12A retained the same repository contract for `ExamResultService` writes and statistics reads. |
 | `SettingsService` | `SettingsRepository` | Читання/збереження параметрів без знання способу зберігання. |
 
-`Clock` передається в `QuizSessionLifecycleService` і `QuizGenerationService`, щоб час можна було детерміновано контролювати в тестах. `QuizGenerationService` додатково створює рівно один random source із request seed на одну генерацію; production constructor використовує `SplittableRandom`, а test constructor приймає factory. `QuizSessionCoordinator` використовує injected `LongSupplier` для session ID та seed; тимчасовий anonymous user ID `0L` належить application infrastructure і не зберігається. Learning не використовує coordinator: його canonical entity ID зберігається в presentation model і передається як typed handoff до Training configuration. Training використовує coordinator як єдиного власника session lifecycle; controllers не будують `QuizGenerationRequest` і не визначають correctness. Конкретний алгоритм хешування паролів навмисно не закодований в `AuthenticationService`: він буде окремою реалізацією `PasswordHasher`.
+`Clock` передається в `QuizSessionLifecycleService` і `QuizGenerationService`, щоб час можна було детерміновано контролювати в тестах. `QuizGenerationService` створює рівно один random source із request seed на одну генерацію; `GeneratedQuestionSetProvider` делегує його question-only seam і не створює temporary `QuizSession`. `QuizSessionCoordinator` створює runtime session через lifecycle service, використовує injected `LongSupplier` для session ID/seed та тимчасовий anonymous user ID `0L`, який не зберігається. Controllers не будують `QuizGenerationRequest`, не визначають correctness і не знають concrete question source. Learning не використовує coordinator. Конкретний алгоритм хешування паролів навмисно не закодований в `AuthenticationService`: він буде окремою реалізацією `PasswordHasher`.
 
 `QuizQuestion` вимагає щонайменше два options з унікальними stable IDs, рівно одну option з `correctAnswerId` та type-specific subject/option shape. `QuizSession` вимагає непорожній набір запитань з унікальними ID, не більше однієї узгодженої відповіді на запитання, належність selected answer до options і відсутність відповідей на сторонні запитання. `QuizSessionLifecycleService` додатково не дозволяє normal completion, доки кожне питання не має відповіді. `ExamResult` гарантує `0 <= correctAnswers <= totalQuestions`, додатну кількість запитань і невід'ємну тривалість.
 
@@ -251,7 +255,7 @@ Passive Learning використовує той самий `PassportRepository.
 
 Training presentation відокремлена від JavaFX через `QuestionPresentationMapper`, `QuestionPresentation`, typed subject/option projections і `QuestionLayoutKind`. Stable option IDs залишаються internal control identity; `correctAnswerId` не входить до presentation contract. Image-card options мають лише нейтральні labels, а localized document-type names створюються presentation mapper-ом. Required image loading проходить тільки через `PassportImageLocator`; помилка залишає question observable, але блокує submission.
 
-Цей presentation contract спільний для майбутнього Examination UI: він не містить `correctAnswerId`, а neutral image labels не залежать від mode. Окрема Examination presentation architecture не потрібна.
+Цей presentation contract спільний для Training та Examination: він не містить `correctAnswerId`, а neutral image labels не залежать від mode. Generic authored question content може пізніше розширити mapper/layout contract без зміни session lifecycle або controller-source boundary.
 
 ## Типовий потік виклику
 
@@ -290,29 +294,29 @@ Runtime composition:
 2. `CatalogueApplicationContext.openReadOnly` створює read-only `SQLiteConnectionProvider` і перевіряє migration version та catalogue integrity;
 3. context створює три SQLite repositories та `ContinentService`, `CountryService`, `PassportService`, `LearningService` і `QuizGenerationService`;
 4. `PassportTrainerApplication` створює `PassportImageLocator`, `QuizSessionLifecycleService`, application-scoped `QuizSessionCoordinator` та `ApplicationControllerFactory`;
-5. session coordinator отримує `QuizGenerationService` із catalogue context, але зберігається application composition root/factory, а не catalogue context;
+5. composition root обгортає `QuizGenerationService` у `GeneratedQuestionSetProvider` і передає provider coordinator-у; coordinator, а не provider, створює session через lifecycle service;
 6. factory окремо завантажує map resources, перевіряє hash/mappings/catalogue coverage і зберігає незалежний map availability state;
 7. `NavigationService` передає factory кожному `FXMLLoader`;
-8. factory constructor-injects лише залежності конкретного controller; Stage 11D додає Training configuration, question і result controllers до Stage 11C Mode Selection/Learning controllers, але не додає Examination controllers.
+8. factory constructor-injects лише залежності конкретного controller; Stage 12B додає Examination confirmation/result controllers і використовує shared `QuestionController` та mode-aware abandonment boundary.
 
-Failure to open or validate catalogue creates an unavailable factory: START remains loadable and disables catalogue, map and mode actions. Failure to load or validate only map resources disables map action but preserves the Stage 7 catalogue fallback and Stage 11 Learning/Training. Service locator і global mutable singleton-об'єкти відсутні.
+Failure to open or validate catalogue creates an unavailable factory: START remains loadable and disables catalogue, map and mode actions. Failure to load or validate only map resources disables map action but preserves catalogue and Learning/Training/Examination flows. Service locator і global mutable singleton-об'єкти відсутні.
 
 ## Тестові межі
 
 - model, service і pure presentation тести не запускають JavaFX toolkit;
 - repository integration-тести використовують лише temporary SQLite DB;
 - map loader/validator тести перевіряють XML hardening, asset integrity, exact region/entity coverage, explicit list-only records і high-risk mappings;
-- catalogue UI smoke-тести завантажують real FXML через production navigation/controller factory, перевіряють complete non-scored Learning flow, canonical Learning-to-Training handoff, accepted Training configuration, всі question layouts, image-card label neutrality, safe image failure gating, authoritative correct/incorrect feedback, in-place progress, completion/results, repeat/new/main-menu behavior, abandonment cancel/confirm, map/list selection, keyboard activation, Unicode search, existing passport flow, real image decode, multi-image controls, existing back navigation, `replace` history semantics і `resetTo` history clearing на graphical JavaFX toolkit;
+- catalogue UI smoke-тести завантажують real FXML через production navigation/controller factory, перевіряють Learning, Training і complete 10-question Examination flows; mode-safe disclosure; typed start failure; result counts/percentage/duration; New Examination/Main Menu; abandonment cancel/confirm; question layouts/image safety; map/catalogue navigation; `replace` history semantics; і `resetTo` history clearing на graphical JavaFX toolkit;
 - UI тести не порівнюють pixel-perfect screenshots;
 - `ArchitectureTest` захищає точний склад enum та заборону JavaFX imports у model;
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє повне покриття immutable source paths;
-- SQLite integration tests перевіряють migrations, V1-to-V2 fail-closed behavior, foreign keys, full import, rollback, canonical counts/content, review-source canonicalization/atomic replacement, fingerprint sensitivity/drift, independent review levels, explicit activation/deactivation, unchanged Stage 9 eligibility filtering, production zero-pool refusal, repositories, read-only composition та logical determinism; generator tests використовують лише explicit controlled candidate fixtures; production Training smoke перевіряє deterministic mixed session, усі eligible documents, readable real images, accepted answers і normal completion; Stage 11E production Examination probe перевіряє deterministic 10-question global generation і normal completion без запису catalogue.
+- SQLite integration tests перевіряють migrations, V1-to-V2 fail-closed behavior, foreign keys, import/review/determinism та read-only composition; generator tests використовують explicit controlled candidates; production Training smoke перевіряє readable real images і normal completion; Stage 12B production Examination smoke перевіряє provider/coordinator-owned deterministic 10-question global runtime, 4 options, all four allowed types, hidden active score і normal completion без запису catalogue.
 
 ## Що навмисно не реалізовано
 
-- Examination screens і complete mode-specific workflow;
+- writable Examination result persistence і concrete production `ResultRepository`;
 - конкретний password hashing algorithm;
-- JavaFX review/admin editor; Stage 10 review є окремим editorial CLI;
+- authored/hybrid Question Bank sources and JavaFX Admin editor; Stage 10 review remains a separate editorial CLI.
 - збереження активної quiz-сесії.
 
 Ці компоненти додаються окремими етапами без порушення зафіксованого напрямку залежностей.

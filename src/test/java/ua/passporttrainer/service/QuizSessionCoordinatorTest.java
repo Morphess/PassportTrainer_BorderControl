@@ -12,10 +12,13 @@ import java.util.function.LongSupplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import ua.passporttrainer.model.AssessmentProvenance;
 import ua.passporttrainer.model.DocumentType;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
 import ua.passporttrainer.model.QuizCandidate;
+import ua.passporttrainer.model.QuestionSet;
+import ua.passporttrainer.model.QuizContent;
 import ua.passporttrainer.model.QuizGenerationFailureReason;
 import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.model.QuizQuestion;
@@ -71,6 +74,47 @@ class QuizSessionCoordinatorTest {
                 () -> assertEquals(1, repository.quizCandidateReads)
         );
     }
+    @Test
+    void startsLifecycleSessionFromProviderQuestionsAndRetainsProvenance() {
+        AtomicInteger providerCalls = new AtomicInteger();
+        QuizQuestion suppliedQuestion = question(91L);
+        AssessmentProvenance provenance = new AssessmentProvenance(
+                "assessment:future",
+                "version:1"
+        );
+        QuestionSetProvider provider = request -> {
+            providerCalls.incrementAndGet();
+            assertEquals(QuizMode.EXAMINATION, request.mode());
+            assertEquals(44L, request.randomSeed());
+            return new QuestionSet(List.of(suppliedQuestion), Optional.of(provenance));
+        };
+        QuizSessionCoordinator isolated = new QuizSessionCoordinator(
+                provider,
+                new QuizSessionLifecycleService(CLOCK),
+                () -> 700L,
+                () -> 44L
+        );
+        isolated.configure(new QuizSessionConfiguration(
+                QuizMode.EXAMINATION,
+                1,
+                2,
+                Set.of(QuizQuestionType.DOCUMENT_TYPE),
+                Set.of(),
+                Set.of(),
+                Set.of()
+        ));
+
+        QuizSession session = isolated.start();
+
+        assertAll(
+                () -> assertEquals(1, providerCalls.get()),
+                () -> assertEquals(700L, session.id()),
+                () -> assertEquals(CLOCK.instant(), session.startedAt()),
+                () -> assertEquals(List.of(suppliedQuestion), session.questions()),
+                () -> assertEquals(Optional.of(provenance), isolated.assessmentProvenance())
+        );
+    }
+
 
     @Test
     void generationFailureRemainsCreatedWithoutPartialState() {
@@ -318,6 +362,26 @@ class QuizSessionCoordinatorTest {
         );
     }
 
+    private static QuizQuestion question(long id) {
+        return new QuizQuestion(
+                id,
+                QuizQuestionType.DOCUMENT_TYPE,
+                new QuizContent.Document(
+                        "document:" + id,
+                        "entity:" + id,
+                        DocumentType.ORDINARY_PASSPORT,
+                        "Document " + id,
+                        "image:" + id,
+                        "fixtures/" + id + ".jpg"
+                ),
+                List.of(
+                        new QuizContent.DocumentTypeValue(DocumentType.ORDINARY_PASSPORT),
+                        new QuizContent.DocumentTypeValue(DocumentType.DIPLOMATIC_PASSPORT)
+                ),
+                DocumentType.ORDINARY_PASSPORT.name()
+        );
+    }
+
     private static String wrongAnswer(QuizQuestion question) {
         return question.options().stream()
                 .map(option -> option.id())
@@ -333,7 +397,7 @@ class QuizSessionCoordinatorTest {
     ) {
         QuizGenerationService generationService = new QuizGenerationService(repository, CLOCK);
         return new QuizSessionCoordinator(
-                generationService,
+                new GeneratedQuestionSetProvider(generationService),
                 new QuizSessionLifecycleService(CLOCK),
                 sessionIds,
                 seeds

@@ -9,7 +9,7 @@ import javafx.scene.control.Label;
 import ua.passporttrainer.model.QuizSessionLifecycle;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
-import ua.passporttrainer.presentation.TrainingGenerationFailureFormatter;
+import ua.passporttrainer.presentation.QuizGenerationFailureFormatter;
 import ua.passporttrainer.presentation.TrainingResultPresentation;
 import ua.passporttrainer.service.QuizGenerationException;
 import ua.passporttrainer.service.QuizSessionCoordinator;
@@ -19,7 +19,7 @@ public final class TrainingResultController {
 
     private final NavigationService navigationService;
     private final QuizSessionCoordinator sessionCoordinator;
-    private final TrainingGenerationFailureFormatter failureFormatter;
+    private final QuizGenerationFailureFormatter failureFormatter;
     private final ResourceBundle resources;
 
     @FXML
@@ -36,7 +36,7 @@ public final class TrainingResultController {
     public TrainingResultController(
             NavigationService navigationService,
             QuizSessionCoordinator sessionCoordinator,
-            TrainingGenerationFailureFormatter failureFormatter,
+            QuizGenerationFailureFormatter failureFormatter,
             ResourceBundle resources
     ) {
         this.navigationService = Objects.requireNonNull(navigationService, "navigationService");

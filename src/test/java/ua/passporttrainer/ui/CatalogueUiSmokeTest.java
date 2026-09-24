@@ -33,7 +33,7 @@ import ua.passporttrainer.controller.ApplicationControllerFactory;
 import ua.passporttrainer.controller.LearningBrowserController;
 import ua.passporttrainer.controller.PassportDetailsController;
 import ua.passporttrainer.controller.PassportListController;
-import ua.passporttrainer.controller.TrainingAbandonmentConfirmation;
+import ua.passporttrainer.controller.SessionAbandonmentConfirmation;
 import ua.passporttrainer.image.FileSystemPassportImageLocator;
 import ua.passporttrainer.image.PassportImageLocator;
 import ua.passporttrainer.map.WorldMapPane;
@@ -41,6 +41,7 @@ import ua.passporttrainer.model.Country;
 import ua.passporttrainer.model.PassportDocument;
 import ua.passporttrainer.model.PassportImage;
 import ua.passporttrainer.model.QuizCandidate;
+import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.model.QuizQuestionType;
 import ua.passporttrainer.model.QuizSessionLifecycle;
 import ua.passporttrainer.presentation.LearningEntityPresentation;
@@ -48,7 +49,10 @@ import ua.passporttrainer.presentation.TrainingScopePresentation;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.repository.PassportRepository;
+import ua.passporttrainer.service.ExaminationConfigurationFactory;
+import ua.passporttrainer.service.GeneratedQuestionSetProvider;
 import ua.passporttrainer.service.PassportService;
+import ua.passporttrainer.service.QuizGenerationService;
 import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.QuizSessionLifecycleService;
 
@@ -122,7 +126,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                        () -> true,
+                        ignored -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -218,7 +222,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                        () -> true,
+                        ignored -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -276,7 +280,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(emptyAssetRoot),
-                        () -> true,
+                        ignored -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -367,7 +371,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                        () -> true,
+                        ignored -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -421,7 +425,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                        () -> true,
+                        ignored -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -523,7 +527,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                        () -> true,
+                        ignored -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -645,7 +649,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         new FileSystemPassportImageLocator(temporaryDirectory),
-                        () -> true,
+                        ignored -> true,
                         resourcesWithoutMapGroupLabel()
                 );
                 NavigationService navigation = new NavigationService(
@@ -715,7 +719,7 @@ class CatalogueUiSmokeTest {
                         context,
                         coordinator,
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                        () -> true,
+                        ignored -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -730,7 +734,7 @@ class CatalogueUiSmokeTest {
                 Parent modeRoot = stage.getScene().getRoot();
                 assertFalse(control(modeRoot, "#learningButton", Button.class).isDisabled());
                 assertFalse(control(modeRoot, "#trainingButton", Button.class).isDisabled());
-                assertTrue(control(modeRoot, "#examinationButton", Button.class).isDisabled());
+                assertFalse(control(modeRoot, "#examinationButton", Button.class).isDisabled());
                 control(modeRoot, "#learningButton", Button.class).fire();
 
                 Parent selectionRoot = stage.getScene().getRoot();
@@ -817,7 +821,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
-                                () -> true,
+                                ignored -> true,
                                 RESOURCES
                         )
                 );
@@ -858,12 +862,12 @@ class CatalogueUiSmokeTest {
                     context,
                     coordinator,
                     new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                    () -> true
+                    ignored -> true
             );
             uiReference.set(ui);
             Parent modeRoot = ui.modeRoot();
             assertFalse(control(modeRoot, "#trainingButton", Button.class).isDisabled());
-            assertTrue(control(modeRoot, "#examinationButton", Button.class).isDisabled());
+            assertFalse(control(modeRoot, "#examinationButton", Button.class).isDisabled());
 
             Parent configurationRoot = ui.configurationRoot();
             assertEquals(5, control(
@@ -958,6 +962,295 @@ class CatalogueUiSmokeTest {
             ui.stage().close();
         });
     }
+    @Test
+    void completesVerticalExaminationWithoutDisclosureAndResetsToMainMenu() throws Exception {
+        Path database = temporaryDirectory.resolve("examination-vertical-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+        AtomicReference<Stage> stageReference = new AtomicReference<>();
+        AtomicReference<NavigationService> navigationReference = new AtomicReference<>();
+        AtomicReference<Parent> questionRootReference = new AtomicReference<>();
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            stageReference.set(stage);
+            ApplicationControllerFactory factory = ApplicationControllerFactory.available(
+                    context,
+                    coordinator,
+                    new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                    ignored -> true,
+                    RESOURCES
+            );
+            NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+            navigationReference.set(navigation);
+            navigation.show(View.START);
+            stage.show();
+            Parent startRoot = stage.getScene().getRoot();
+            control(startRoot, "#modeSelectionButton", Button.class).fire();
+            Parent modeRoot = stage.getScene().getRoot();
+            assertFalse(control(modeRoot, "#examinationButton", Button.class).isDisabled());
+            control(modeRoot, "#examinationButton", Button.class).fire();
+
+            Parent confirmationRoot = stage.getScene().getRoot();
+            assertEquals("10", control(
+                    confirmationRoot, "#questionCountLabel", Label.class
+            ).getText());
+            assertEquals("4", control(
+                    confirmationRoot, "#optionCountLabel", Label.class
+            ).getText());
+            assertFalse(control(
+                    confirmationRoot, "#feedbackPolicyLabel", Label.class
+            ).getText().isBlank());
+            control(confirmationRoot, "#startExaminationButton", Button.class).fire();
+
+            Parent questionRoot = stage.getScene().getRoot();
+            questionRootReference.set(questionRoot);
+            assertEquals(QuizMode.EXAMINATION, coordinator.session().orElseThrow().mode());
+            assertEquals(10, coordinator.session().orElseThrow().questions().size());
+            assertTrue(coordinator.visibleScore().isEmpty());
+            selectQuestionOption(questionRoot, coordinator.currentQuestion().correctAnswerId());
+        });
+
+        for (int index = 0; index < 10; index++) {
+            awaitFxCondition(() -> !control(
+                    questionRootReference.get(), "#submitButton", Button.class
+            ).isDisabled());
+            int questionIndex = index;
+            onFxThread(() -> {
+                Parent questionRoot = questionRootReference.get();
+                assertSame(questionRoot, stageReference.get().getScene().getRoot());
+                assertTrue(coordinator.visibleScore().isEmpty());
+                control(questionRoot, "#submitButton", Button.class).fire();
+                assertTrue(coordinator.visibleScore().isEmpty());
+                Label feedback = control(questionRoot, "#feedbackLabel", Label.class);
+                assertTrue(feedback.getText().isEmpty());
+                assertFalse(feedback.isVisible());
+                assertTrue(questionOptions(questionRoot).stream().allMatch(ToggleButton::isDisabled));
+                assertTrue(questionOptions(questionRoot).stream().noneMatch(option ->
+                        option.getStyleClass().contains("correct-answer")
+                                || option.getStyleClass().contains("incorrect-answer")
+                ));
+                control(questionRoot, "#nextButton", Button.class).fire();
+                if (questionIndex < 9) {
+                    assertSame(questionRoot, stageReference.get().getScene().getRoot());
+                    assertEquals(
+                            questionIndex + 1,
+                            coordinator.currentQuestionIndex().orElseThrow()
+                    );
+                    selectQuestionOption(
+                            questionRoot,
+                            coordinator.currentQuestion().correctAnswerId()
+                    );
+                }
+            });
+        }
+
+        onFxThread(() -> {
+            Stage stage = stageReference.get();
+            Parent resultRoot = stage.getScene().getRoot();
+            assertEquals("10", control(resultRoot, "#correctCountLabel", Label.class).getText());
+            assertEquals("0", control(resultRoot, "#incorrectCountLabel", Label.class).getText());
+            assertEquals("10", control(resultRoot, "#totalCountLabel", Label.class).getText());
+            assertEquals("100%", control(resultRoot, "#percentageLabel", Label.class).getText());
+            assertEquals("0 с", control(resultRoot, "#durationLabel", Label.class).getText());
+            assertEquals(QuizSessionLifecycle.COMPLETED, coordinator.lifecycle().orElseThrow());
+            control(resultRoot, "#mainMenuButton", Button.class).fire();
+
+            Parent resetRoot = stage.getScene().getRoot();
+            assertNotNull(resetRoot.lookup("#modeSelectionButton"));
+            assertFalse(navigationReference.get().canGoBack());
+            assertTrue(coordinator.session().isEmpty());
+            stage.close();
+        });
+    }
+    @Test
+    void activeExaminationBackCancelPreservesAndConfirmAbandons() throws Exception {
+        Path database = temporaryDirectory.resolve("examination-abandon-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+        Deque<Boolean> confirmationAnswers = new ArrayDeque<>(List.of(false, true));
+        AtomicReference<Stage> stageReference = new AtomicReference<>();
+        AtomicReference<Parent> confirmationRootReference = new AtomicReference<>();
+        AtomicReference<Parent> questionRootReference = new AtomicReference<>();
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            stageReference.set(stage);
+            NavigationService navigation = new NavigationService(
+                    stage,
+                    RESOURCES,
+                    ApplicationControllerFactory.available(
+                            context,
+                            coordinator,
+                            new FileSystemPassportImageLocator(
+                                    Path.of("Зразки паспортних документів")
+                            ),
+                            ignored -> confirmationAnswers.removeFirst(),
+                            RESOURCES
+                    )
+            );
+            navigation.show(View.MODE_SELECTION);
+            stage.show();
+            Parent modeRoot = stage.getScene().getRoot();
+            control(modeRoot, "#examinationButton", Button.class).fire();
+            Parent confirmationRoot = stage.getScene().getRoot();
+            confirmationRootReference.set(confirmationRoot);
+            control(confirmationRoot, "#startExaminationButton", Button.class).fire();
+            Parent questionRoot = stage.getScene().getRoot();
+            questionRootReference.set(questionRoot);
+            selectQuestionOption(questionRoot, coordinator.currentQuestion().correctAnswerId());
+        });
+
+        awaitFxCondition(() -> !control(
+                questionRootReference.get(), "#submitButton", Button.class
+        ).isDisabled());
+        onFxThread(() -> {
+            Parent questionRoot = questionRootReference.get();
+            control(questionRoot, "#submitButton", Button.class).fire();
+            control(questionRoot, "#nextButton", Button.class).fire();
+            long sessionId = coordinator.session().orElseThrow().id();
+            long seed = coordinator.randomSeed().orElseThrow();
+            assertEquals(1, coordinator.currentQuestionIndex().orElseThrow());
+            assertEquals(1, coordinator.session().orElseThrow().answers().size());
+
+            control(questionRoot, "#backButton", Button.class).fire();
+            assertSame(questionRoot, stageReference.get().getScene().getRoot());
+            assertEquals(sessionId, coordinator.session().orElseThrow().id());
+            assertEquals(seed, coordinator.randomSeed().orElseThrow());
+            assertEquals(1, coordinator.currentQuestionIndex().orElseThrow());
+            assertEquals(1, coordinator.session().orElseThrow().answers().size());
+
+            control(questionRoot, "#backButton", Button.class).fire();
+            assertSame(
+                    confirmationRootReference.get(),
+                    stageReference.get().getScene().getRoot()
+            );
+            assertEquals(QuizSessionLifecycle.CREATED, coordinator.lifecycle().orElseThrow());
+            assertTrue(coordinator.session().isEmpty());
+            stageReference.get().close();
+        });
+    }
+
+    @Test
+    void examinationTypedGenerationFailureStaysOnConfirmation() throws Exception {
+        Path database = temporaryDirectory.resolve("examination-failure-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = new QuizSessionCoordinator(
+                new GeneratedQuestionSetProvider(
+                        new QuizGenerationService(emptyPassportRepository(), Clock.systemUTC())
+                ),
+                new QuizSessionLifecycleService(Clock.systemUTC()),
+                () -> 1L,
+                () -> 2L
+        );
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                NavigationService navigation = new NavigationService(
+                        stage,
+                        RESOURCES,
+                        ApplicationControllerFactory.available(
+                                context,
+                                coordinator,
+                                new FileSystemPassportImageLocator(
+                                        Path.of("Зразки паспортних документів")
+                                ),
+                                ignored -> true,
+                                RESOURCES
+                        )
+                );
+                navigation.show(View.MODE_SELECTION);
+                stage.show();
+                control(
+                        stage.getScene().getRoot(), "#examinationButton", Button.class
+                ).fire();
+                Parent confirmationRoot = stage.getScene().getRoot();
+                control(
+                        confirmationRoot, "#startExaminationButton", Button.class
+                ).fire();
+
+                assertSame(confirmationRoot, stage.getScene().getRoot());
+                assertEquals(
+                        MessageFormat.format(
+                                RESOURCES.getString(
+                                        "examination.failure.insufficientEligibleData"
+                                ),
+                                10,
+                                0
+                        ),
+                        control(confirmationRoot, "#errorLabel", Label.class).getText()
+                );
+                assertEquals(
+                        QuizSessionLifecycle.CREATED,
+                        coordinator.lifecycle().orElseThrow()
+                );
+                assertTrue(coordinator.session().isEmpty());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void newExaminationClearsCompletedStateAndReturnsToConfirmation() throws Exception {
+        Path database = temporaryDirectory.resolve("examination-new-ui.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(database);
+        QuizSessionCoordinator coordinator = sessionCoordinator(context);
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                NavigationService navigation = new NavigationService(
+                        stage,
+                        RESOURCES,
+                        ApplicationControllerFactory.available(
+                                context,
+                                coordinator,
+                                new FileSystemPassportImageLocator(
+                                        Path.of("Зразки паспортних документів")
+                                ),
+                                ignored -> true,
+                                RESOURCES
+                        )
+                );
+                navigation.show(View.MODE_SELECTION);
+                stage.show();
+                control(
+                        stage.getScene().getRoot(), "#examinationButton", Button.class
+                ).fire();
+                Parent confirmationRoot = stage.getScene().getRoot();
+
+                coordinator.configure(new ExaminationConfigurationFactory().create());
+                coordinator.start();
+                for (int index = 0; index < 10; index++) {
+                    coordinator.submitAnswer(coordinator.currentQuestion().correctAnswerId());
+                    if (index < 9) {
+                        coordinator.advance();
+                    }
+                }
+                coordinator.complete();
+                navigation.show(View.EXAMINATION_RESULT);
+                Parent resultRoot = stage.getScene().getRoot();
+                control(resultRoot, "#newExaminationButton", Button.class).fire();
+
+                assertSame(confirmationRoot, stage.getScene().getRoot());
+                assertEquals(
+                        QuizSessionLifecycle.CREATED,
+                        coordinator.lifecycle().orElseThrow()
+                );
+                assertTrue(coordinator.session().isEmpty());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+
 
     @Test
     void repeatUsesFreshIdentityAndNewTrainingReturnsToConfiguration() throws Exception {
@@ -973,7 +1266,7 @@ class CatalogueUiSmokeTest {
                     context,
                     coordinator,
                     new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                    () -> true
+                    ignored -> true
             );
             uiReference.set(ui);
             configureQuestionType(ui.configurationRoot(), QuizQuestionType.DOCUMENT_TYPE, 1);
@@ -1038,7 +1331,7 @@ class CatalogueUiSmokeTest {
                     context,
                     coordinator,
                     new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                    confirmationAnswers::removeFirst
+                    ignored -> confirmationAnswers.removeFirst()
             );
             uiReference.set(ui);
             configureQuestionType(ui.configurationRoot(), QuizQuestionType.DOCUMENT_TYPE, 2);
@@ -1088,7 +1381,7 @@ class CatalogueUiSmokeTest {
                     context,
                     coordinator,
                     new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                    () -> true
+                    ignored -> true
             );
             uiReference.set(ui);
             configureQuestionType(ui.configurationRoot(), QuizQuestionType.COUNTRY_TO_PASSPORT, 1);
@@ -1147,7 +1440,7 @@ class CatalogueUiSmokeTest {
                         context,
                         coordinator,
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
-                        () -> true,
+                        ignored -> true,
                         RESOURCES
                 );
                 NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
@@ -1215,7 +1508,7 @@ class CatalogueUiSmokeTest {
                     context,
                     coordinator,
                     new FileSystemPassportImageLocator(temporaryDirectory.resolve("missing-assets")),
-                    () -> true
+                    ignored -> true
             );
             try {
                 configureQuestionType(ui.configurationRoot(), QuizQuestionType.DOCUMENT_TYPE, 1);
@@ -1256,7 +1549,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
-                                () -> true,
+                                ignored -> true,
                                 RESOURCES
                         )
                 );
@@ -1290,7 +1583,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
-                                () -> true,
+                                ignored -> true,
                                 RESOURCES
                         )
                 );
@@ -1328,7 +1621,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
-                                () -> true,
+                                ignored -> true,
                                 RESOURCES
                         )
                 );
@@ -1350,7 +1643,7 @@ class CatalogueUiSmokeTest {
             CatalogueApplicationContext context,
             QuizSessionCoordinator coordinator,
             PassportImageLocator imageLocator,
-            TrainingAbandonmentConfirmation abandonmentConfirmation
+            SessionAbandonmentConfirmation abandonmentConfirmation
     ) {
         Stage stage = new Stage();
         ApplicationControllerFactory factory = ApplicationControllerFactory.available(
@@ -1431,12 +1724,36 @@ class CatalogueUiSmokeTest {
         AtomicLong sessionIds = new AtomicLong(1L);
         AtomicLong seeds = new AtomicLong(100L);
         return new QuizSessionCoordinator(
-                context.quizGenerationService(),
+                new GeneratedQuestionSetProvider(context.quizGenerationService()),
                 new QuizSessionLifecycleService(Clock.fixed(Instant.EPOCH, ZoneOffset.UTC)),
                 sessionIds::getAndIncrement,
                 seeds::getAndIncrement
         );
     }
+    private static PassportRepository emptyPassportRepository() {
+        return new PassportRepository() {
+            @Override
+            public Optional<PassportDocument> findById(String id) {
+                return Optional.empty();
+            }
+
+            @Override
+            public List<PassportDocument> findByCountryId(String countryId) {
+                return List.of();
+            }
+
+            @Override
+            public List<PassportImage> findImagesByDocumentId(String passportDocumentId) {
+                return List.of();
+            }
+
+            @Override
+            public List<QuizCandidate> findQuizEligibleCandidates() {
+                return List.of();
+            }
+        };
+    }
+
 
     private static ResourceBundle resourcesWithoutMapGroupLabel() {
         return new ResourceBundle() {

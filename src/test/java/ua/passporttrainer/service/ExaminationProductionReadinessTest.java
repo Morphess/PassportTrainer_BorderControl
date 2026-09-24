@@ -2,20 +2,22 @@ package ua.passporttrainer.service;
 
 import java.nio.file.Path;
 import java.time.Clock;
+import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
-import ua.passporttrainer.model.QuizGenerationRequest;
 import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.model.QuizQuestion;
 import ua.passporttrainer.model.QuizQuestionType;
 import ua.passporttrainer.model.QuizSession;
+import ua.passporttrainer.model.QuizSessionConfiguration;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ExaminationProductionReadinessTest {
@@ -23,42 +25,47 @@ class ExaminationProductionReadinessTest {
     private static final Path PRODUCTION_CATALOGUE =
             Path.of("data", "passport-catalogue", "passport-catalogue.sqlite");
     private static final long FIXED_SEED = 20260924L;
+    private static final Clock CLOCK = Clock.fixed(
+            Instant.parse("2026-09-24T12:00:00Z"),
+            ZoneOffset.UTC
+    );
 
     @Test
-    void probesDeterministicTenQuestionExaminationCapacity() throws Exception {
+    void runsDeterministicFixedExaminationAgainstReadOnlyProductionCatalogue() throws Exception {
         CatalogueApplicationContext context = CatalogueApplicationContext.openReadOnly(PRODUCTION_CATALOGUE);
-        QuizGenerationRequest request = new QuizGenerationRequest(
-                800L,
-                QuizSessionCoordinator.ANONYMOUS_USER_ID,
-                QuizMode.EXAMINATION,
-                10,
-                4,
-                Set.of(QuizQuestionType.values()),
-                Set.of(),
-                Set.of(),
-                Set.of(),
-                FIXED_SEED
-        );
+        QuizSessionConfiguration configuration = new ExaminationConfigurationFactory().create();
+        QuizSessionCoordinator firstCoordinator = coordinator(context, 800L);
+        QuizSessionCoordinator secondCoordinator = coordinator(context, 801L);
+        firstCoordinator.configure(configuration);
+        secondCoordinator.configure(configuration);
 
-        QuizSession first = context.quizGenerationService().generate(request);
-        QuizSession second = context.quizGenerationService().generate(request);
+        QuizSession first = firstCoordinator.start();
+        QuizSession second = secondCoordinator.start();
 
-        QuizSession answered = first;
-        QuizSessionLifecycleService lifecycleService = new QuizSessionLifecycleService(Clock.fixed(
-                first.startedAt().plusSeconds(600),
-                ZoneOffset.UTC
-        ));
-        for (QuizQuestion question : first.questions()) {
-            answered = lifecycleService.submitAnswer(
-                    answered,
-                    question.id(),
-                    question.correctAnswerId()
+        for (int index = 0; index < first.questions().size(); index++) {
+            QuizQuestion question = firstCoordinator.currentQuestion();
+            assertInstanceOf(
+                    QuizAnswerSubmissionResult.Accepted.class,
+                    firstCoordinator.submitAnswer(question.correctAnswerId())
             );
+            assertTrue(firstCoordinator.visibleScore().isEmpty());
+            if (index + 1 < first.questions().size()) {
+                firstCoordinator.advance();
+            }
         }
-        QuizSession completed = lifecycleService.completeSession(answered);
+        QuizSession completed = firstCoordinator.complete();
 
         assertAll(
-                () -> assertEquals(QuizMode.EXAMINATION, first.mode()),
+                () -> assertEquals(QuizMode.EXAMINATION, configuration.mode()),
+                () -> assertEquals(10, configuration.questionCount()),
+                () -> assertEquals(4, configuration.optionCount()),
+                () -> assertEquals(
+                        Set.of(QuizQuestionType.values()),
+                        configuration.allowedQuestionTypes()
+                ),
+                () -> assertTrue(configuration.continentIds().isEmpty()),
+                () -> assertTrue(configuration.entityIds().isEmpty()),
+                () -> assertTrue(configuration.documentTypes().isEmpty()),
                 () -> assertEquals(10, first.questions().size()),
                 () -> assertTrue(first.answers().isEmpty()),
                 () -> assertFalse(first.completed()),
@@ -73,7 +80,19 @@ class ExaminationProductionReadinessTest {
                 )),
                 () -> assertTrue(completed.completed()),
                 () -> assertEquals(10, completed.answers().size()),
-                () -> assertEquals(first.startedAt().plusSeconds(600), completed.completedAt())
+                () -> assertEquals(10, firstCoordinator.visibleScore().orElseThrow())
+        );
+    }
+
+    private static QuizSessionCoordinator coordinator(
+            CatalogueApplicationContext context,
+            long sessionId
+    ) {
+        return new QuizSessionCoordinator(
+                new GeneratedQuestionSetProvider(context.quizGenerationService()),
+                new QuizSessionLifecycleService(CLOCK),
+                () -> sessionId,
+                () -> FIXED_SEED
         );
     }
 }

@@ -21,6 +21,7 @@ import ua.passporttrainer.model.QuizContent;
 import ua.passporttrainer.model.QuizGenerationFailureReason;
 import ua.passporttrainer.model.QuizGenerationRequest;
 import ua.passporttrainer.model.QuizQuestion;
+import ua.passporttrainer.model.QuestionSet;
 import ua.passporttrainer.model.QuizQuestionType;
 import ua.passporttrainer.model.QuizSession;
 import ua.passporttrainer.repository.PassportRepository;
@@ -59,6 +60,19 @@ public final class QuizGenerationService {
     }
 
     public QuizSession generate(QuizGenerationRequest request) {
+        QuestionSet questionSet = generateQuestionSet(request);
+        return new QuizSession(
+                request.sessionId(),
+                request.userId(),
+                request.mode(),
+                clock.instant(),
+                null,
+                questionSet.questions(),
+                List.of()
+        );
+    }
+
+    QuestionSet generateQuestionSet(QuizGenerationRequest request) {
         Objects.requireNonNull(request, "request");
         validateRequest(request);
         RandomGenerator random = Objects.requireNonNull(
@@ -139,15 +153,7 @@ public final class QuizGenerationService {
             );
         }
 
-        return new QuizSession(
-                request.sessionId(),
-                request.userId(),
-                request.mode(),
-                clock.instant(),
-                null,
-                questions,
-                List.of()
-        );
+        return QuestionSet.generated(questions);
     }
 
     private List<QuizCandidate> eligibleCandidates(QuizGenerationRequest request) {

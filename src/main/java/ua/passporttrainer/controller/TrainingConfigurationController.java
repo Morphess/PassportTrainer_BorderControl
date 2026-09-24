@@ -20,7 +20,7 @@ import ua.passporttrainer.model.QuizSessionConfiguration;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.presentation.LearningEntityPresentation;
-import ua.passporttrainer.presentation.TrainingGenerationFailureFormatter;
+import ua.passporttrainer.presentation.QuizGenerationFailureFormatter;
 import ua.passporttrainer.presentation.TrainingScopePresentation;
 import ua.passporttrainer.service.LearningService;
 import ua.passporttrainer.service.QuizGenerationException;
@@ -34,7 +34,7 @@ public final class TrainingConfigurationController {
     private final QuizSessionCoordinator sessionCoordinator;
     private final LearningService learningService;
     private final TrainingConfigurationFactory configurationFactory;
-    private final TrainingGenerationFailureFormatter failureFormatter;
+    private final QuizGenerationFailureFormatter failureFormatter;
     private final ResourceBundle resources;
 
     @FXML
@@ -61,7 +61,7 @@ public final class TrainingConfigurationController {
             QuizSessionCoordinator sessionCoordinator,
             LearningService learningService,
             TrainingConfigurationFactory configurationFactory,
-            TrainingGenerationFailureFormatter failureFormatter,
+            QuizGenerationFailureFormatter failureFormatter,
             ResourceBundle resources
     ) {
         this.navigationService = Objects.requireNonNull(navigationService, "navigationService");

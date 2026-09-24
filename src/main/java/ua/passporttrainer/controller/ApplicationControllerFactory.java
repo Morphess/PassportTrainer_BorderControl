@@ -8,9 +8,11 @@ import ua.passporttrainer.map.WorldMapResourceLoader;
 import ua.passporttrainer.map.WorldMapValidator;
 import ua.passporttrainer.navigation.NavigationControllerFactory;
 import ua.passporttrainer.navigation.NavigationService;
+import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.presentation.QuestionPresentationMapper;
-import ua.passporttrainer.presentation.TrainingGenerationFailureFormatter;
+import ua.passporttrainer.presentation.QuizGenerationFailureFormatter;
 import ua.passporttrainer.service.QuizSessionCoordinator;
+import ua.passporttrainer.service.ExaminationConfigurationFactory;
 import ua.passporttrainer.service.TrainingConfigurationFactory;
 
 import java.util.Objects;
@@ -27,10 +29,12 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     private final Throwable mapFailure;
     private final PassportImageLocator imageLocator;
     private final ResourceBundle resources;
-    private final TrainingAbandonmentConfirmation abandonmentConfirmation;
+    private final SessionAbandonmentConfirmation abandonmentConfirmation;
     private final TrainingConfigurationFactory trainingConfigurationFactory;
     private final QuestionPresentationMapper questionPresentationMapper;
-    private final TrainingGenerationFailureFormatter trainingFailureFormatter;
+    private final QuizGenerationFailureFormatter trainingFailureFormatter;
+    private final QuizGenerationFailureFormatter examinationFailureFormatter;
+    private final ExaminationConfigurationFactory examinationConfigurationFactory;
 
     private ApplicationControllerFactory(
             CatalogueApplicationContext catalogueContext,
@@ -40,7 +44,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
             ResourceBundle regionLabels,
             Throwable mapFailure,
             PassportImageLocator imageLocator,
-            TrainingAbandonmentConfirmation abandonmentConfirmation,
+            SessionAbandonmentConfirmation abandonmentConfirmation,
             ResourceBundle resources
     ) {
         this.catalogueContext = catalogueContext;
@@ -54,14 +58,20 @@ public final class ApplicationControllerFactory implements NavigationControllerF
         this.abandonmentConfirmation = abandonmentConfirmation;
         this.trainingConfigurationFactory = new TrainingConfigurationFactory();
         this.questionPresentationMapper = new QuestionPresentationMapper(resources);
-        this.trainingFailureFormatter = new TrainingGenerationFailureFormatter(resources);
+        this.trainingFailureFormatter = new QuizGenerationFailureFormatter(
+                resources, QuizMode.TRAINING
+        );
+        this.examinationFailureFormatter = new QuizGenerationFailureFormatter(
+                resources, QuizMode.EXAMINATION
+        );
+        this.examinationConfigurationFactory = new ExaminationConfigurationFactory();
     }
 
     public static ApplicationControllerFactory available(
             CatalogueApplicationContext catalogueContext,
             QuizSessionCoordinator sessionCoordinator,
             PassportImageLocator imageLocator,
-            TrainingAbandonmentConfirmation abandonmentConfirmation,
+            SessionAbandonmentConfirmation abandonmentConfirmation,
             ResourceBundle resources
     ) {
         Objects.requireNonNull(catalogueContext, "catalogueContext");
@@ -139,6 +149,15 @@ public final class ApplicationControllerFactory implements NavigationControllerF
                     resources
             );
         }
+        if (controllerType == ExaminationConfirmationController.class) {
+            return new ExaminationConfirmationController(
+                    navigationService,
+                    sessionCoordinator,
+                    examinationConfigurationFactory,
+                    examinationFailureFormatter,
+                    resources
+            );
+        }
         if (controllerType == QuestionController.class) {
             return new QuestionController(
                     navigationService,
@@ -152,6 +171,11 @@ public final class ApplicationControllerFactory implements NavigationControllerF
         if (controllerType == TrainingResultController.class) {
             return new TrainingResultController(
                     navigationService, sessionCoordinator, trainingFailureFormatter, resources
+            );
+        }
+        if (controllerType == ExaminationResultController.class) {
+            return new ExaminationResultController(
+                    navigationService, sessionCoordinator, resources
             );
         }
         if (controllerType == WorldMapController.class) {
