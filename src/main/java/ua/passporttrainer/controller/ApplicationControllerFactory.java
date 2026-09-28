@@ -11,12 +11,14 @@ import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.presentation.QuestionPresentationMapper;
 import ua.passporttrainer.presentation.QuizGenerationFailureFormatter;
+import ua.passporttrainer.service.AccountSessionService;
 import ua.passporttrainer.service.ExamResultService;
 import ua.passporttrainer.service.ExaminationConfigurationFactory;
 import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.TrainingConfigurationFactory;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.ResourceBundle;
 
 /** Creates only the application's explicitly supported FXML controllers. */
@@ -25,6 +27,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     private final CatalogueApplicationContext catalogueContext;
     private final QuizSessionCoordinator sessionCoordinator;
     private final ExamResultService examResultService;
+    private final AccountSessionService accountSessionService;
     private final Throwable catalogueFailure;
     private final WorldMapDefinition mapDefinition;
     private final ResourceBundle regionLabels;
@@ -42,6 +45,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
             CatalogueApplicationContext catalogueContext,
             QuizSessionCoordinator sessionCoordinator,
             ExamResultService examResultService,
+            AccountSessionService accountSessionService,
             Throwable catalogueFailure,
             WorldMapDefinition mapDefinition,
             ResourceBundle regionLabels,
@@ -52,6 +56,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     ) {
         this.catalogueContext = catalogueContext;
         this.sessionCoordinator = sessionCoordinator;
+        this.accountSessionService = accountSessionService;
         this.examResultService = examResultService;
         this.catalogueFailure = catalogueFailure;
         this.mapDefinition = mapDefinition;
@@ -75,6 +80,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
             CatalogueApplicationContext catalogueContext,
             QuizSessionCoordinator sessionCoordinator,
             ExamResultService examResultService,
+            AccountSessionService accountSessionService,
             PassportImageLocator imageLocator,
             SessionAbandonmentConfirmation abandonmentConfirmation,
             ResourceBundle resources
@@ -82,6 +88,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
         Objects.requireNonNull(catalogueContext, "catalogueContext");
         Objects.requireNonNull(sessionCoordinator, "sessionCoordinator");
         Objects.requireNonNull(examResultService, "examResultService");
+        Objects.requireNonNull(accountSessionService, "accountSessionService");
         Objects.requireNonNull(abandonmentConfirmation, "abandonmentConfirmation");
         WorldMapDefinition mapDefinition = null;
         ResourceBundle regionLabels = null;
@@ -100,8 +107,8 @@ public final class ApplicationControllerFactory implements NavigationControllerF
             mapFailure = exception;
         }
         return new ApplicationControllerFactory(
-                catalogueContext, sessionCoordinator, examResultService, null,
-                mapDefinition, regionLabels, mapFailure, imageLocator,
+                catalogueContext, sessionCoordinator, examResultService, accountSessionService,
+                null, mapDefinition, regionLabels, mapFailure, imageLocator,
                 abandonmentConfirmation, resources
         );
     }
@@ -113,7 +120,8 @@ public final class ApplicationControllerFactory implements NavigationControllerF
     ) {
         Throwable failure = Objects.requireNonNull(catalogueFailure, "catalogueFailure");
         return new ApplicationControllerFactory(
-                null, null, null, failure, null, null, failure, imageLocator, null, resources
+                null, null, null, null, failure, null, null, failure,
+                imageLocator, null, resources
         );
     }
 
@@ -123,7 +131,24 @@ public final class ApplicationControllerFactory implements NavigationControllerF
         Objects.requireNonNull(navigationService, "navigationService");
         if (controllerType == StartController.class) {
             return new StartController(
-                    navigationService, catalogueContext != null, mapDefinition != null && mapFailure == null, resources
+                    navigationService,
+                    catalogueContext != null,
+                    mapDefinition != null && mapFailure == null,
+                    resources,
+                    Optional.ofNullable(accountSessionService)
+            );
+        }
+        if (controllerType == FirstRunAdministratorController.class) {
+            return new FirstRunAdministratorController(
+                    navigationService, requireAccountServices(), resources
+            );
+        }
+        if (controllerType == LoginController.class) {
+            return new LoginController(navigationService, requireAccountServices(), resources);
+        }
+        if (controllerType == AccountCreationController.class) {
+            return new AccountCreationController(
+                    navigationService, requireAccountServices(), resources
             );
         }
         CatalogueApplicationContext context = requireCatalogue();
@@ -168,6 +193,7 @@ public final class ApplicationControllerFactory implements NavigationControllerF
             return new QuestionController(
                     navigationService,
                     sessionCoordinator,
+                    accountSessionService,
                     questionPresentationMapper,
                     imageLocator,
                     abandonmentConfirmation,
@@ -212,6 +238,13 @@ public final class ApplicationControllerFactory implements NavigationControllerF
             throw new IllegalStateException("Catalogue is unavailable", catalogueFailure);
         }
         return catalogueContext;
+    }
+
+    private AccountSessionService requireAccountServices() {
+        if (accountSessionService == null) {
+            throw new IllegalStateException("Account services are unavailable", catalogueFailure);
+        }
+        return accountSessionService;
     }
 
     private void requireMap() {

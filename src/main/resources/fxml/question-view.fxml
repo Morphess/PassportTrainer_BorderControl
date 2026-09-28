@@ -45,6 +45,8 @@
     <bottom>
         <HBox alignment="CENTER" spacing="12.0">
             <Button fx:id="backButton" onAction="#requestBack" text="%common.back" />
+            <Button fx:id="logoutButton" onAction="#logout" text="%account.logout" />
+            <Button fx:id="switchUserButton" onAction="#switchUser" text="%account.switchUser" />
             <Button fx:id="submitButton" defaultButton="true" disable="true"
                     onAction="#submitAnswer" styleClass="primary-button" text="%training.submit" />
             <Button fx:id="nextButton" disable="true" onAction="#showNextQuestion" text="%training.next" />

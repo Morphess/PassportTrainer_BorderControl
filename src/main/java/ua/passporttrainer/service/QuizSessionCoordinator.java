@@ -18,11 +18,12 @@ import ua.passporttrainer.model.QuizSessionLifecycle;
 /** Owns the single in-memory quiz session configured by the application. */
 public final class QuizSessionCoordinator {
 
-    /** Temporary identity for non-persisted sessions before local user accounts exist. */
+    /** Runtime identity used only when no local account is authenticated. */
     public static final long ANONYMOUS_USER_ID = 0L;
 
     private final QuestionSetProvider questionSetProvider;
     private final QuizSessionLifecycleService lifecycleService;
+    private final LongSupplier userIdSupplier;
     private final LongSupplier sessionIdSupplier;
     private final LongSupplier randomSeedSupplier;
 
@@ -36,11 +37,13 @@ public final class QuizSessionCoordinator {
     public QuizSessionCoordinator(
             QuestionSetProvider questionSetProvider,
             QuizSessionLifecycleService lifecycleService,
+            LongSupplier userIdSupplier,
             LongSupplier sessionIdSupplier,
             LongSupplier randomSeedSupplier
     ) {
         this.questionSetProvider = Objects.requireNonNull(questionSetProvider, "questionSetProvider");
         this.lifecycleService = Objects.requireNonNull(lifecycleService, "lifecycleService");
+        this.userIdSupplier = Objects.requireNonNull(userIdSupplier, "userIdSupplier");
         this.sessionIdSupplier = Objects.requireNonNull(sessionIdSupplier, "sessionIdSupplier");
         this.randomSeedSupplier = Objects.requireNonNull(randomSeedSupplier, "randomSeedSupplier");
     }
@@ -57,11 +60,15 @@ public final class QuizSessionCoordinator {
 
     public QuizSession start() {
         requireLifecycle(QuizSessionLifecycle.CREATED);
+        long userId = userIdSupplier.getAsLong();
+        if (userId < ANONYMOUS_USER_ID) {
+            throw new IllegalStateException("Current user ID must not be negative");
+        }
         long sessionId = sessionIdSupplier.getAsLong();
         long seed = randomSeedSupplier.getAsLong();
         QuizGenerationRequest request = new QuizGenerationRequest(
                 sessionId,
-                ANONYMOUS_USER_ID,
+                userId,
                 configuration.mode(),
                 configuration.questionCount(),
                 configuration.optionCount(),
@@ -76,7 +83,7 @@ public final class QuizSessionCoordinator {
         validateQuestionSet(questionSet, request);
         QuizSession started = lifecycleService.startSession(
                 sessionId,
-                ANONYMOUS_USER_ID,
+                userId,
                 configuration.mode(),
                 questionSet.questions()
         );

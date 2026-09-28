@@ -27,6 +27,7 @@ import ua.passporttrainer.presentation.QuestionLayoutKind;
 import ua.passporttrainer.presentation.QuestionOptionPresentation;
 import ua.passporttrainer.presentation.QuestionPresentation;
 import ua.passporttrainer.presentation.QuestionPresentationMapper;
+import ua.passporttrainer.service.AccountSessionService;
 import ua.passporttrainer.service.QuizAnswerSubmissionResult;
 import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.QuizSessionProgress;
@@ -36,6 +37,7 @@ public final class QuestionController {
 
     private final NavigationService navigationService;
     private final QuizSessionCoordinator sessionCoordinator;
+    private final AccountSessionService accountSessionService;
     private final QuestionPresentationMapper presentationMapper;
     private final PassportImageLocator imageLocator;
     private final SessionAbandonmentConfirmation abandonmentConfirmation;
@@ -78,6 +80,7 @@ public final class QuestionController {
     public QuestionController(
             NavigationService navigationService,
             QuizSessionCoordinator sessionCoordinator,
+            AccountSessionService accountSessionService,
             QuestionPresentationMapper presentationMapper,
             PassportImageLocator imageLocator,
             SessionAbandonmentConfirmation abandonmentConfirmation,
@@ -85,6 +88,9 @@ public final class QuestionController {
     ) {
         this.navigationService = Objects.requireNonNull(navigationService, "navigationService");
         this.sessionCoordinator = Objects.requireNonNull(sessionCoordinator, "sessionCoordinator");
+        this.accountSessionService = Objects.requireNonNull(
+                accountSessionService, "accountSessionService"
+        );
         this.presentationMapper = Objects.requireNonNull(presentationMapper, "presentationMapper");
         this.imageLocator = Objects.requireNonNull(imageLocator, "imageLocator");
         this.abandonmentConfirmation = Objects.requireNonNull(
@@ -172,6 +178,29 @@ public final class QuestionController {
         }
         sessionCoordinator.abandon();
         navigationService.goBack();
+    }
+
+    @FXML
+    private void logout() {
+        requestAccountExit(false);
+    }
+
+    @FXML
+    private void switchUser() {
+        requestAccountExit(true);
+    }
+
+    private void requestAccountExit(boolean switchingUser) {
+        if (!abandonmentConfirmation.confirmAbandonment(mode)) {
+            return;
+        }
+        sessionCoordinator.abandon();
+        if (switchingUser) {
+            accountSessionService.switchUser();
+        } else {
+            accountSessionService.logout();
+        }
+        navigationService.resetTo(View.LOGIN);
     }
 
     private void showCurrentQuestion() {

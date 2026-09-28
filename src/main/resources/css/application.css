@@ -177,6 +177,15 @@
     -fx-min-height: 22px;
 }
 
+.account-panel .text-field {
+    -fx-pref-width: 300px;
+}
+
+.current-user-label {
+    -fx-font-weight: bold;
+    -fx-text-fill: #e2e8f0;
+}
+
 .mode-selection-panel,
 .learning-selection-panel {
     -fx-max-width: 620px;

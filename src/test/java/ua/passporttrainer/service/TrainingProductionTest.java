@@ -43,6 +43,7 @@ class TrainingProductionTest {
         QuizSessionCoordinator coordinator = new QuizSessionCoordinator(
                 new GeneratedQuestionSetProvider(context.quizGenerationService()),
                 new QuizSessionLifecycleService(CLOCK),
+                () -> QuizSessionCoordinator.ANONYMOUS_USER_ID,
                 sessionIds::getAndIncrement,
                 seeds::getAndIncrement
         );

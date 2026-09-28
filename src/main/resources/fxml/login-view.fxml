@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/25"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="ua.passporttrainer.controller.LoginController"
+      alignment="CENTER" spacing="16.0" styleClass="screen-root">
+    <padding>
+        <Insets top="28.0" right="28.0" bottom="28.0" left="28.0" />
+    </padding>
+    <Label styleClass="screen-title" text="%login.title" />
+    <Label styleClass="support-label" text="%login.description" />
+    <GridPane hgap="12.0" maxWidth="500.0" styleClass="content-panel, account-panel" vgap="12.0">
+        <Label styleClass="support-label" text="%account.username" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+        <TextField fx:id="usernameField" promptText="%account.usernamePrompt"
+                   GridPane.columnIndex="1" GridPane.rowIndex="0" />
+        <Label styleClass="support-label" text="%account.password" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+        <PasswordField fx:id="passwordField" promptText="%account.passwordPrompt"
+                       GridPane.columnIndex="1" GridPane.rowIndex="1" />
+    </GridPane>
+    <Label fx:id="errorLabel" maxWidth="500.0" styleClass="error-label"
+           textAlignment="CENTER" wrapText="true" />
+    <HBox alignment="CENTER" spacing="10.0">
+        <Button fx:id="loginButton" defaultButton="true" onAction="#login"
+                styleClass="primary-button" text="%login.login" />
+        <Button fx:id="anonymousButton" onAction="#continueAnonymously" text="%login.anonymous" />
+        <Button fx:id="createAccountButton" onAction="#createAccount" text="%login.createAccount" />
+    </HBox>
+</VBox>

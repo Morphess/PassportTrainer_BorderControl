@@ -91,6 +91,7 @@ class QuizSessionCoordinatorTest {
         QuizSessionCoordinator isolated = new QuizSessionCoordinator(
                 provider,
                 new QuizSessionLifecycleService(CLOCK),
+                () -> QuizSessionCoordinator.ANONYMOUS_USER_ID,
                 () -> 700L,
                 () -> 44L
         );
@@ -112,6 +113,46 @@ class QuizSessionCoordinatorTest {
                 () -> assertEquals(CLOCK.instant(), session.startedAt()),
                 () -> assertEquals(List.of(suppliedQuestion), session.questions()),
                 () -> assertEquals(Optional.of(provenance), isolated.assessmentProvenance())
+        );
+    }
+
+    @Test
+    void capturesCurrentUserOwnershipExactlyOnceWhenSessionStarts() {
+        AtomicLong currentUserId = new AtomicLong(42L);
+        AtomicInteger identityReads = new AtomicInteger();
+        AtomicLong requestedUserId = new AtomicLong();
+        QuestionSetProvider provider = request -> {
+            requestedUserId.set(request.userId());
+            return new QuestionSet(List.of(question(92L)), Optional.empty());
+        };
+        QuizSessionCoordinator isolated = new QuizSessionCoordinator(
+                provider,
+                new QuizSessionLifecycleService(CLOCK),
+                () -> {
+                    identityReads.incrementAndGet();
+                    return currentUserId.get();
+                },
+                () -> 701L,
+                () -> 45L
+        );
+        isolated.configure(new QuizSessionConfiguration(
+                QuizMode.EXAMINATION,
+                1,
+                2,
+                Set.of(QuizQuestionType.DOCUMENT_TYPE),
+                Set.of(),
+                Set.of(),
+                Set.of()
+        ));
+
+        QuizSession session = isolated.start();
+        currentUserId.set(99L);
+
+        assertAll(
+                () -> assertEquals(42L, requestedUserId.get()),
+                () -> assertEquals(42L, session.userId()),
+                () -> assertEquals(42L, isolated.session().orElseThrow().userId()),
+                () -> assertEquals(1, identityReads.get())
         );
     }
 
@@ -399,6 +440,7 @@ class QuizSessionCoordinatorTest {
         return new QuizSessionCoordinator(
                 new GeneratedQuestionSetProvider(generationService),
                 new QuizSessionLifecycleService(CLOCK),
+                () -> QuizSessionCoordinator.ANONYMOUS_USER_ID,
                 sessionIds,
                 seeds
         );

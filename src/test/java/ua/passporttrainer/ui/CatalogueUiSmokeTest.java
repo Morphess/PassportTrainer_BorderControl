@@ -10,6 +10,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
+import javafx.scene.control.PasswordField;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.ToggleButton;
@@ -29,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import ua.passporttrainer.CatalogueTestSupport;
 import ua.passporttrainer.catalogue.CatalogueApplicationContext;
+import ua.passporttrainer.database.ApplicationDatabaseContext;
 import ua.passporttrainer.controller.ApplicationControllerFactory;
 import ua.passporttrainer.controller.LearningBrowserController;
 import ua.passporttrainer.controller.PassportDetailsController;
@@ -40,11 +42,14 @@ import ua.passporttrainer.map.WorldMapPane;
 import ua.passporttrainer.model.Country;
 import ua.passporttrainer.model.ExamResult;
 import ua.passporttrainer.model.PassportDocument;
+import ua.passporttrainer.model.NewUser;
 import ua.passporttrainer.model.PassportImage;
 import ua.passporttrainer.model.QuizCandidate;
 import ua.passporttrainer.model.QuizMode;
 import ua.passporttrainer.model.QuizQuestionType;
 import ua.passporttrainer.model.QuizSessionLifecycle;
+import ua.passporttrainer.model.User;
+import ua.passporttrainer.model.UserRole;
 import ua.passporttrainer.presentation.LearningEntityPresentation;
 import ua.passporttrainer.presentation.TrainingScopePresentation;
 import ua.passporttrainer.navigation.NavigationService;
@@ -52,13 +57,20 @@ import ua.passporttrainer.navigation.View;
 import ua.passporttrainer.repository.PassportRepository;
 import ua.passporttrainer.repository.RepositoryAccessException;
 import ua.passporttrainer.repository.ResultRepository;
+import ua.passporttrainer.repository.UserRepository;
+import ua.passporttrainer.security.CurrentUserSession;
+import ua.passporttrainer.security.AuthenticatedUser;
+import ua.passporttrainer.security.PasswordHasher;
 import ua.passporttrainer.service.ExamResultService;
+import ua.passporttrainer.service.AccountSessionService;
+import ua.passporttrainer.service.AuthenticationService;
 import ua.passporttrainer.service.ExaminationConfigurationFactory;
 import ua.passporttrainer.service.GeneratedQuestionSetProvider;
 import ua.passporttrainer.service.PassportService;
 import ua.passporttrainer.service.QuizGenerationService;
 import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.QuizSessionLifecycleService;
+import ua.passporttrainer.service.UserAccountService;
 
 import java.nio.file.Path;
 import java.text.MessageFormat;
@@ -70,12 +82,15 @@ import java.sql.SQLException;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
+import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
+import java.util.function.LongSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.CountDownLatch;
@@ -115,6 +130,294 @@ class CatalogueUiSmokeTest {
     }
 
     @Test
+    void firstRunCreatesAdministratorThenOrdinaryUserThroughAccountUi() throws Exception {
+        Path catalogueDatabase = temporaryDirectory.resolve("first-run-catalogue.sqlite");
+        Path applicationDatabase = temporaryDirectory.resolve("first-run-application.sqlite");
+        CatalogueTestSupport.importCatalogue(catalogueDatabase);
+        CatalogueApplicationContext catalogue =
+                CatalogueApplicationContext.openReadOnly(catalogueDatabase);
+        ApplicationDatabaseContext application =
+                ApplicationDatabaseContext.open(applicationDatabase);
+        QuizSessionCoordinator coordinator = sessionCoordinator(
+                catalogue,
+                () -> application.currentUserSession().currentUserIdOr(
+                        QuizSessionCoordinator.ANONYMOUS_USER_ID
+                )
+        );
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
+                        catalogue,
+                        coordinator,
+                        application.examResultService(),
+                        application.accountSessionService(),
+                        new FileSystemPassportImageLocator(temporaryDirectory),
+                        ignored -> true,
+                        RESOURCES
+                );
+                NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+                navigation.show(
+                        application.accountSessionService().initialAdministratorRequired()
+                                ? View.FIRST_RUN_ADMINISTRATOR
+                                : View.LOGIN
+                );
+                stage.show();
+
+                Parent setupRoot = stage.getScene().getRoot();
+                assertNotNull(setupRoot.lookup("#createAdministratorButton"));
+                control(setupRoot, "#usernameField", TextField.class).setText("  ＡDMIN  ");
+                control(setupRoot, "#displayNameField", TextField.class)
+                        .setText("Local Administrator");
+                PasswordField password = control(
+                        setupRoot, "#passwordField", PasswordField.class
+                );
+                PasswordField confirmation = control(
+                        setupRoot, "#passwordConfirmationField", PasswordField.class
+                );
+                password.setText("correct password");
+                confirmation.setText("correct password");
+                control(setupRoot, "#createAdministratorButton", Button.class).fire();
+
+                Parent startRoot = stage.getScene().getRoot();
+                AuthenticatedUser administrator =
+                        application.accountSessionService().currentUser().orElseThrow();
+                assertEquals(UserRole.ADMIN, administrator.role());
+                assertEquals("admin", administrator.username());
+                assertEquals(
+                        MessageFormat.format(
+                                RESOURCES.getString("account.currentUser"),
+                                "Local Administrator",
+                                RESOURCES.getString("account.role.ADMIN")
+                        ),
+                        control(startRoot, "#currentUserLabel", Label.class).getText()
+                );
+                assertTrue(password.getText().isEmpty());
+                assertTrue(confirmation.getText().isEmpty());
+                assertFalse(navigation.canGoBack());
+                User persistedAdministrator = application.userRepository()
+                        .findById(administrator.id()).orElseThrow();
+                assertNotEquals("correct password", persistedAdministrator.passwordHash());
+
+                control(startRoot, "#switchUserButton", Button.class).fire();
+                assertTrue(application.accountSessionService().currentUser().isEmpty());
+                Parent loginRoot = stage.getScene().getRoot();
+                assertNotNull(loginRoot.lookup("#loginButton"));
+                control(loginRoot, "#createAccountButton", Button.class).fire();
+
+                Parent creationRoot = stage.getScene().getRoot();
+                control(creationRoot, "#usernameField", TextField.class).setText("learner");
+                control(creationRoot, "#displayNameField", TextField.class).setText("Learner");
+                control(creationRoot, "#passwordField", PasswordField.class)
+                        .setText("learner password");
+                control(creationRoot, "#passwordConfirmationField", PasswordField.class)
+                        .setText("learner password");
+                control(creationRoot, "#createUserButton", Button.class).fire();
+
+                AuthenticatedUser ordinary =
+                        application.accountSessionService().currentUser().orElseThrow();
+                assertEquals(UserRole.USER, ordinary.role());
+                assertEquals(
+                        UserRole.USER,
+                        application.userRepository().findById(ordinary.id()).orElseThrow().role()
+                );
+                assertNotNull(stage.getScene().getRoot().lookup("#modeSelectionButton"));
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
+    void anonymousThenLoginCompletesUserOwnedExaminationAndLogsOut() throws Exception {
+        Path catalogueDatabase = temporaryDirectory.resolve("login-exam-catalogue.sqlite");
+        Path applicationDatabase = temporaryDirectory.resolve("login-exam-application.sqlite");
+        CatalogueTestSupport.importCatalogue(catalogueDatabase);
+        CatalogueApplicationContext catalogue =
+                CatalogueApplicationContext.openReadOnly(catalogueDatabase);
+        ApplicationDatabaseContext application =
+                ApplicationDatabaseContext.open(applicationDatabase);
+        char[] password = "correct password".toCharArray();
+        application.userAccountService().createInitialAdministrator(
+                "admin", "Administrator", password, password
+        );
+        AuthenticatedUser examiner = application.userAccountService().createOrdinaryAccount(
+                "examiner", "Examiner", password, password
+        );
+        QuizSessionCoordinator coordinator = sessionCoordinator(
+                catalogue,
+                () -> application.currentUserSession().currentUserIdOr(
+                        QuizSessionCoordinator.ANONYMOUS_USER_ID
+                )
+        );
+        AtomicReference<Stage> stageReference = new AtomicReference<>();
+        AtomicReference<Parent> questionRootReference = new AtomicReference<>();
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            stageReference.set(stage);
+            ApplicationControllerFactory factory = ApplicationControllerFactory.available(
+                    catalogue,
+                    coordinator,
+                    application.examResultService(),
+                    application.accountSessionService(),
+                    new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
+                    ignored -> true,
+                    RESOURCES
+            );
+            NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+            navigation.show(View.LOGIN);
+            stage.show();
+
+            Parent loginRoot = stage.getScene().getRoot();
+            control(loginRoot, "#anonymousButton", Button.class).fire();
+            Parent anonymousRoot = stage.getScene().getRoot();
+            assertEquals(
+                    RESOURCES.getString("account.currentAnonymous"),
+                    control(anonymousRoot, "#currentUserLabel", Label.class).getText()
+            );
+            assertTrue(application.accountSessionService().currentUser().isEmpty());
+            control(anonymousRoot, "#switchUserButton", Button.class).fire();
+
+            loginRoot = stage.getScene().getRoot();
+            control(loginRoot, "#usernameField", TextField.class).setText("examiner");
+            PasswordField passwordField = control(
+                    loginRoot, "#passwordField", PasswordField.class
+            );
+            passwordField.setText("wrong password");
+            control(loginRoot, "#loginButton", Button.class).fire();
+            assertEquals(
+                    RESOURCES.getString("login.error.invalidCredentials"),
+                    control(loginRoot, "#errorLabel", Label.class).getText()
+            );
+            assertTrue(passwordField.getText().isEmpty());
+            assertTrue(application.accountSessionService().currentUser().isEmpty());
+
+            passwordField.setText("correct password");
+            control(loginRoot, "#loginButton", Button.class).fire();
+            Parent startRoot = stage.getScene().getRoot();
+            assertEquals(examiner, application.accountSessionService().currentUser().orElseThrow());
+            control(startRoot, "#modeSelectionButton", Button.class).fire();
+            Parent modeRoot = stage.getScene().getRoot();
+            control(modeRoot, "#examinationButton", Button.class).fire();
+            Parent confirmationRoot = stage.getScene().getRoot();
+            control(confirmationRoot, "#startExaminationButton", Button.class).fire();
+
+            Parent questionRoot = stage.getScene().getRoot();
+            questionRootReference.set(questionRoot);
+            assertEquals(examiner.id(), coordinator.session().orElseThrow().userId());
+            selectQuestionOption(questionRoot, coordinator.currentQuestion().correctAnswerId());
+        });
+
+        for (int index = 0; index < 10; index++) {
+            awaitFxCondition(() -> !control(
+                    questionRootReference.get(), "#submitButton", Button.class
+            ).isDisabled());
+            int questionIndex = index;
+            onFxThread(() -> {
+                Parent questionRoot = questionRootReference.get();
+                control(questionRoot, "#submitButton", Button.class).fire();
+                control(questionRoot, "#nextButton", Button.class).fire();
+                if (questionIndex < 9) {
+                    selectQuestionOption(
+                            questionRoot,
+                            coordinator.currentQuestion().correctAnswerId()
+                    );
+                }
+            });
+        }
+
+        onFxThread(() -> {
+            Stage stage = stageReference.get();
+            Parent resultRoot = stage.getScene().getRoot();
+            assertNotNull(resultRoot.lookup("#mainMenuButton"));
+            List<ExamResult> persisted =
+                    application.resultRepository().findByUserId(examiner.id());
+            assertEquals(1, persisted.size());
+            assertEquals(examiner.id(), persisted.getFirst().userId());
+
+            control(resultRoot, "#mainMenuButton", Button.class).fire();
+            Parent startRoot = stage.getScene().getRoot();
+            control(startRoot, "#logoutButton", Button.class).fire();
+
+            assertNotNull(stage.getScene().getRoot().lookup("#loginButton"));
+            assertTrue(application.accountSessionService().currentUser().isEmpty());
+            assertEquals(
+                    examiner.id(),
+                    application.resultRepository().findByUserId(examiner.id())
+                            .getFirst().userId()
+            );
+            stage.close();
+        });
+    }
+
+    @Test
+    void activeQuizLogoutCancelPreservesIdentityAndConfirmAbandons() throws Exception {
+        Path database = temporaryDirectory.resolve("account-exit-catalogue.sqlite");
+        CatalogueTestSupport.importCatalogue(database);
+        CatalogueApplicationContext catalogue = CatalogueApplicationContext.openReadOnly(database);
+        AccountSessionService accountAccess = accountSessionService();
+        AuthenticatedUser principal = accountAccess.createInitialAdministratorAndLogin(
+                "admin", "Administrator",
+                "correct password".toCharArray(), "correct password".toCharArray()
+        );
+        QuizSessionCoordinator coordinator = sessionCoordinator(
+                catalogue,
+                () -> accountAccess.currentUser()
+                        .map(AuthenticatedUser::id)
+                        .orElse(QuizSessionCoordinator.ANONYMOUS_USER_ID)
+        );
+        Deque<Boolean> confirmations = new ArrayDeque<>(List.of(false, true));
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                NavigationService navigation = new NavigationService(
+                        stage,
+                        RESOURCES,
+                        ApplicationControllerFactory.available(
+                                catalogue,
+                                coordinator,
+                                examResultService(),
+                                accountAccess,
+                                new FileSystemPassportImageLocator(
+                                        Path.of("Зразки паспортних документів")
+                                ),
+                                ignored -> confirmations.removeFirst(),
+                                RESOURCES
+                        )
+                );
+                navigation.show(View.MODE_SELECTION);
+                stage.show();
+                control(
+                        stage.getScene().getRoot(), "#examinationButton", Button.class
+                ).fire();
+                control(
+                        stage.getScene().getRoot(), "#startExaminationButton", Button.class
+                ).fire();
+                Parent questionRoot = stage.getScene().getRoot();
+                long sessionId = coordinator.session().orElseThrow().id();
+
+                control(questionRoot, "#logoutButton", Button.class).fire();
+                assertSame(questionRoot, stage.getScene().getRoot());
+                assertEquals(sessionId, coordinator.session().orElseThrow().id());
+                assertEquals(principal, accountAccess.currentUser().orElseThrow());
+
+                control(questionRoot, "#logoutButton", Button.class).fire();
+                assertNotNull(stage.getScene().getRoot().lookup("#loginButton"));
+                assertTrue(coordinator.session().isEmpty());
+                assertEquals(QuizSessionLifecycle.CREATED, coordinator.lifecycle().orElseThrow());
+                assertTrue(accountAccess.currentUser().isEmpty());
+                assertFalse(navigation.canGoBack());
+                assertTrue(confirmations.isEmpty());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
     void opensCatalogueDocumentsAndImageDetailsThenNavigatesBack() throws Exception {
         Path database = temporaryDirectory.resolve("catalogue-ui.sqlite");
         CatalogueTestSupport.importCatalogue(database);
@@ -130,6 +433,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -227,6 +531,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -286,6 +591,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(emptyAssetRoot),
                         ignored -> true,
                         RESOURCES
@@ -378,6 +684,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -433,6 +740,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -536,6 +844,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -659,6 +968,7 @@ class CatalogueUiSmokeTest {
                         context,
                         sessionCoordinator(context),
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(temporaryDirectory),
                         ignored -> true,
                         resourcesWithoutMapGroupLabel()
@@ -730,6 +1040,7 @@ class CatalogueUiSmokeTest {
                         context,
                         coordinator,
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -833,6 +1144,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 examResultService(),
+                                accountSessionService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -993,6 +1305,7 @@ class CatalogueUiSmokeTest {
                     context,
                     coordinator,
                     new ExamResultService(resultRepository),
+                    accountSessionService(),
                     new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                     ignored -> true,
                     RESOURCES
@@ -1120,6 +1433,7 @@ class CatalogueUiSmokeTest {
                             context,
                             coordinator,
                             examResultService(),
+                            accountSessionService(),
                             new FileSystemPassportImageLocator(
                                     Path.of("Зразки паспортних документів")
                             ),
@@ -1179,6 +1493,7 @@ class CatalogueUiSmokeTest {
                         new QuizGenerationService(emptyPassportRepository(), Clock.systemUTC())
                 ),
                 new QuizSessionLifecycleService(Clock.systemUTC()),
+                () -> QuizSessionCoordinator.ANONYMOUS_USER_ID,
                 () -> 1L,
                 () -> 2L
         );
@@ -1193,6 +1508,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 coordinator,
                                 examResultService(),
+                                accountSessionService(),
                                 new FileSystemPassportImageLocator(
                                         Path.of("Зразки паспортних документів")
                                 ),
@@ -1249,6 +1565,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 coordinator,
                                 examResultService(),
+                                accountSessionService(),
                                 new FileSystemPassportImageLocator(
                                         Path.of("Зразки паспортних документів")
                                 ),
@@ -1478,6 +1795,7 @@ class CatalogueUiSmokeTest {
                         context,
                         coordinator,
                         examResultService(),
+                        accountSessionService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -1588,6 +1906,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 examResultService(),
+                                accountSessionService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1623,6 +1942,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 examResultService(),
+                                accountSessionService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1662,6 +1982,7 @@ class CatalogueUiSmokeTest {
                                 context,
                                 sessionCoordinator(context),
                                 examResultService(),
+                                accountSessionService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1692,6 +2013,7 @@ class CatalogueUiSmokeTest {
                 context,
                 coordinator,
                 examResultService(),
+                accountSessionService(),
                 imageLocator,
                 abandonmentConfirmation,
                 RESOURCES
@@ -1764,11 +2086,19 @@ class CatalogueUiSmokeTest {
     }
 
     private static QuizSessionCoordinator sessionCoordinator(CatalogueApplicationContext context) {
+        return sessionCoordinator(context, () -> QuizSessionCoordinator.ANONYMOUS_USER_ID);
+    }
+
+    private static QuizSessionCoordinator sessionCoordinator(
+            CatalogueApplicationContext context,
+            LongSupplier currentUserIdSupplier
+    ) {
         AtomicLong sessionIds = new AtomicLong(1L);
         AtomicLong seeds = new AtomicLong(100L);
         return new QuizSessionCoordinator(
                 new GeneratedQuestionSetProvider(context.quizGenerationService()),
                 new QuizSessionLifecycleService(Clock.fixed(Instant.EPOCH, ZoneOffset.UTC)),
+                currentUserIdSupplier,
                 sessionIds::getAndIncrement,
                 seeds::getAndIncrement
         );
@@ -1776,6 +2106,85 @@ class CatalogueUiSmokeTest {
 
     private static ExamResultService examResultService() {
         return new ExamResultService(new TestResultRepository(false));
+    }
+
+    private static AccountSessionService accountSessionService() {
+        UserRepository repository = new TestUserRepository();
+        PasswordHasher passwordHasher = new TestPasswordHasher();
+        Clock clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC);
+        return new AccountSessionService(
+                new UserAccountService(repository, passwordHasher, clock),
+                new AuthenticationService(repository, passwordHasher, clock),
+                new CurrentUserSession()
+        );
+    }
+
+    private static final class TestUserRepository implements UserRepository {
+
+        private final Map<Long, User> users = new HashMap<>();
+        private long nextId = 1L;
+
+        @Override
+        public boolean hasUsers() {
+            return !users.isEmpty();
+        }
+
+        @Override
+        public Optional<User> findById(long id) {
+            return Optional.ofNullable(users.get(id));
+        }
+
+        @Override
+        public Optional<User> findByUsername(String canonicalUsername) {
+            return users.values().stream()
+                    .filter(user -> user.username().equals(canonicalUsername))
+                    .findFirst();
+        }
+
+        @Override
+        public User create(NewUser newUser) {
+            User user = new User(
+                    nextId++,
+                    newUser.username(),
+                    newUser.displayName(),
+                    newUser.passwordHash(),
+                    newUser.role(),
+                    true,
+                    newUser.createdAt(),
+                    newUser.createdAt()
+            );
+            users.put(user.id(), user);
+            return user;
+        }
+
+        @Override
+        public Optional<User> createIfEmpty(NewUser newUser) {
+            return hasUsers() ? Optional.empty() : Optional.of(create(newUser));
+        }
+
+        @Override
+        public User update(User user) {
+            users.put(user.id(), user);
+            return user;
+        }
+    }
+
+    private static final class TestPasswordHasher implements PasswordHasher {
+
+        @Override
+        public String hash(char[] rawPassword) {
+            return "test:" + String.valueOf(rawPassword);
+        }
+
+        @Override
+        public boolean matches(char[] rawPassword, String encodedHash) {
+            return encodedHash.equals(hash(rawPassword));
+        }
+
+        @Override
+        public boolean needsRehash(String encodedHash) {
+            return false;
+        }
     }
 
     private static final class TestResultRepository implements ResultRepository {

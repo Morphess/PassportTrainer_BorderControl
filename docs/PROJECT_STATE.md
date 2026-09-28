@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after Stage 12C. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after Stage 13C. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -32,21 +32,23 @@ This document records the repository state after Stage 12C. It distinguishes imp
 - Repository interfaces for continents, countries, passports, users, results, and settings; `PassportRepository` includes one bounded quiz-candidate read.
 - Service-layer classes using constructor injection, including catalogue browsing by canonical continent membership.
 - `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
-- A separate writable per-user application SQLite database, created from checksummed application migrations independently of the strictly read-only passport catalogue.
+- A separate writable per-user application SQLite database, created from checksummed application migrations independently of the strictly read-only passport catalogue; application V2 adds local users and referential result ownership.
 - Separate quiz-session lifecycle and examination-result boundaries: `QuizSessionLifecycleService` owns in-memory session correctness/completion, while `ExamResultService` is the sole result writer through `ResultRepository`; `SQLiteResultRepository` provides transactional idempotent persistence and shared `StatisticsService` reads.
+- Local accounts with database-generated user IDs, canonical Unicode usernames, mutable display names, `USER`/`ADMIN` roles, soft deactivation, transactional `SQLiteUserRepository`, Argon2id password hashing, generic authentication failure, transparent rehash-on-login, password-free principals, in-memory `CurrentUserSession`, and an active-admin authorization boundary.
+- Localized first-run creation of exactly one initial `ADMIN`, ordinary `USER` registration, login or anonymous continuation, compact current-user presentation, and logout/switch-user navigation; active quiz exit reuses the existing abandonment confirmation and never transfers a session.
 - `QuizGenerationService`, which filters canonical verified eligible candidates, applies canonical continent/entity/document-type scopes, builds all four supported question types, selects semantic distractors, shuffles through one injectable seeded random source, prevents repeated correct documents/images, and exposes the same generation algorithm to full-session callers and `GeneratedQuestionSetProvider` without creating a temporary second session.
-- An application-scoped, JavaFX-independent `QuizSessionCoordinator` that depends on `QuestionSetProvider`, owns session identity/timestamps/answers/progression/completion through `QuizSessionLifecycleService`, preserves immutable accepted configuration and optional assessment provenance, provides mode-safe feedback/score disclosure, and supports restart and non-persisted abandonment.
+- An application-scoped, JavaFX-independent `QuizSessionCoordinator` that depends on `QuestionSetProvider`, captures an injected current-user ID exactly once at session start, owns session identity/timestamps/answers/progression/completion through `QuizSessionLifecycleService`, preserves immutable accepted configuration and optional assessment provenance, provides mode-safe feedback/score disclosure, and supports restart and non-persisted abandonment.
 - A minimal `QuizModePolicy` that exposes immediate correctness and active score only for Training; Examination receives accepted-answer progress only and exposes score after completion.
 - A complete non-scored Learning Mode UI: START mode entry, explicit mode selection, reviewed-entity selection, and a passive document browser with localized metadata, safe image loading, navigation progress, Previous/Next, country-scoped Training handoff, and back navigation.
 - A complete non-persistent Training Mode UI: global or country-scoped configuration, all four generated question types across image/text and image-card layouts, safe image gating, authoritative immediate feedback, in-place progression, completion/result summary, restart, new configuration, main-menu reset, and confirmed abandonment.
 - A complete generated Examination Mode UI with a fixed 10-question/4-option global policy, no active correctness/running score, confirmed abandonment, completion-only result disclosure, transactional result persistence, explicit localized save retry, new Examination, and main-menu reset.
 - A JavaFX-independent `LearningService` that reuses `PassportRepository.findQuizEligibleCandidates()`, defensively applies the canonical `QuizCandidate.usable()` contract, deduplicates by canonical document, and returns stable presentation-safe entity/document models without creating a `QuizSession`.
-- A 207-test JUnit suite covering isolated catalogue and application SQLite integration, migrations/version rejection, result idempotency/provenance/anonymous identity, quiz-generation and lifecycle invariants, Learning/Training regression, deterministic production Training/Examination smokes, and JavaFX vertical behavior including persistence retry.
+- A 228-test JUnit suite covering isolated catalogue and application SQLite integration, V1→V2 migration/rollback, user/authentication/Argon2id/session/authorization behavior, account JavaFX flows, result ownership/idempotency/provenance, quiz-generation and lifecycle invariants, Learning/Training regression, deterministic production smokes, and JavaFX vertical behavior.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
 - The verified source passport dataset audit and Stage 5 manifest decisions in `docs/database-analysis.md`.
-- Two checksummed passport-catalogue migrations remain unchanged; a separate checksummed application-database V1 creates only migration metadata and completed Examination results.
+- Two checksummed passport-catalogue migrations remain unchanged; separate application-database V1 creates completed Examination results and V2 transactionally adds users plus nullable result-owner foreign keys.
 - A deterministic transactional importer that consumes the independently validated Stage 5 manifest plus the validated Stage 10 review source, fails before mutation on stale review data, and produces a post-import validated logical catalogue fingerprint.
 - Working `SQLiteContinentRepository`, `SQLiteCountryRepository`, and `SQLitePassportRepository` implementations behind repository boundaries, with canonical `String` IDs, alternate geography, review status, aggregate entity document counts, image counts, and a prepared quiz-candidate query restricted to fully verified, known-type, quiz-eligible, non-duplicate records.
 - A non-JavaFX `CatalogueApplicationContext` that validates a read-only catalogue and wires all three SQLite repositories into `ContinentService`, `CountryService`, `PassportService`, and `QuizGenerationService`.
@@ -61,13 +63,13 @@ This document records the repository state after Stage 12C. It distinguishes imp
 - Versioned SQLite schema creation and deterministic manifest ingestion are implemented; Windows packaging of the read-only catalogue and passport assets remains a later release concern.
 - Learning remains passive and non-scored; Training and active quiz sessions remain in-memory and non-persistent; only completed Examination summaries are persisted.
 - Training immediate disclosure and Examination non-disclosure are enforced through `QuizModePolicy` and the shared coordinator/question controller.
-- Authentication, users, settings, authored Question Bank/Admin, active-session persistence, and statistics UI remain unimplemented.
-- Localization infrastructure covers the implemented catalogue, interactive-map, mode-selection, Learning, Training, and generated Examination flows in the default resource bundle; additional locales are not present.
+- Persistent users, authentication, first-run/account/login/logout/switch UI, current-user state, roles, and result ownership are implemented; settings, authored Question Bank/Admin UI, active-session persistence, and statistics UI remain unimplemented.
+- Localization infrastructure covers the implemented account, catalogue, interactive-map, mode-selection, Learning, Training, and generated Examination flows in the default resource bundle; additional locales are not present.
 
 ### Not implemented
 
 - Authored/hybrid Question Bank sources and Admin UI.
-- Persistent users, settings, active quiz sessions, and user-facing statistics.
+- Persistent settings, active quiz-session persistence, and user-facing result-history/statistics.
 - Windows runtime image, installer, and Windows execution verification.
 
 ### Current architecture
@@ -248,6 +250,27 @@ Stage 12C verification established that:
 - save failure leaves the completed session and answers intact, disables destructive navigation and exposes localized retry; an ambiguous post-commit retry remains idempotent;
 - deterministic production Examination generation completes, persists to a temporary application database, reads back canonical facts and leaves the production catalogue byte-for-byte unchanged.
 
+Stage 13B verification established that:
+
+- application V2 creates strict local users and transactionally rebuilds `examination_results` with nullable `users(id)` ownership while preserving every V1 result fact, index and anonymous `NULL`;
+- an unexpected non-null V1 owner without a corresponding user fails the migration and rolls back all V2 schema changes rather than inventing an account;
+- `SQLiteUserRepository` uses database-generated positive IDs, immutable canonical usernames, mutable display names, `USER`/`ADMIN`, timestamps and soft deactivation with no physical-delete API;
+- `UsernameNormalizer` applies Unicode NFKC, trimming and `Locale.ROOT` lowercase in account/authentication services; canonical duplicates are rejected;
+- Argon2id uses random 16-byte salts and encoded parameters/hash, verifies without plaintext persistence and supports rehash-on-login;
+- `AuthenticatedUser` contains no password hash; `CurrentUserSession` is application-scoped/in-memory, and `AuthorizationService` revalidates an active persisted `ADMIN`;
+- `QuizSessionCoordinator` captures the injected current user once at start; anonymous ownership remains runtime `0L`/persisted `NULL`, while authenticated results retain a real user foreign key after logout or deactivation;
+- no user UI, Admin/Question Bank, settings UI, or active-session persistence was added.
+
+Stage 13C verification established that:
+
+- startup detects an empty application user store and routes to localized first-run setup; an atomic repository insert permits exactly one initial `ADMIN`;
+- ordinary account creation always assigns `USER`; both account forms reuse canonical usernames, service validation and password confirmation without exposing hashes or role selection;
+- `AccountSessionService` coordinates existing account/authentication/current-session boundaries for generic login failure, anonymous continuation, logout and switch-user; inactive users still cannot create a current session;
+- START presents only display name plus localized role or anonymous state; controllers receive password-free principals/services and never query `UserRepository`;
+- logout/switch from an active Training or Examination question reuses abandonment confirmation: cancel preserves session/identity, while confirm abandons before clearing identity and resets navigation to login; Learning remains passive and owns no `QuizSession`;
+- anonymous Examination still captures runtime `0L` and persists `NULL`; authenticated Examination captures the real user once, and logout after completion does not alter historical ownership;
+- authored Question Bank/Admin UI, persistent settings, active-session persistence and result-history/statistics UI remain future work.
+
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
@@ -281,8 +304,8 @@ Source files must remain unchanged. SQLite catalogue ingestion consumes the cano
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and runtime flow; Stage 9 added quiz generation; Stage 10 added editorial review/activation and deterministic read-only catalogue materialization; Stage 11 added shared Learning/Training/Examination lifecycle infrastructure; Stages 12B–12C completed generated Examination runtime/UI and separate completed-result persistence.
+- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and runtime flow; Stage 9 added quiz generation; Stage 10 added editorial review/activation and deterministic read-only catalogue materialization; Stage 11 added shared Learning/Training/Examination lifecycle infrastructure; Stages 12B–12C completed generated Examination runtime/UI and result persistence; Stages 13B–13C added the local user/authentication/session/ownership foundation and user/session UI.
 
 ### Immediate next step
 
-Stage 12C Examination result persistence is complete. The roadmap defines no Stage 12D scope; the next planned stage is Stage 13 users, settings, result-history/statistics UI, and their additional writable application-data migrations. Authored Question Bank/Admin, active-session persistence, and Windows packaging remain later work.
+Stage 13C user/session UI is complete. The next planned pass is Stage 13D bounded result-history/statistics queries and user-facing UI; authored Question Bank/Admin, active-session persistence, and Windows packaging remain later work.

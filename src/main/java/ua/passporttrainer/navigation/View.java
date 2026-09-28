@@ -4,6 +4,9 @@ package ua.passporttrainer.navigation;
  * Registry of navigable FXML views.
  */
 public enum View {
+    FIRST_RUN_ADMINISTRATOR("/fxml/first-run-administrator-view.fxml"),
+    LOGIN("/fxml/login-view.fxml"),
+    ACCOUNT_CREATION("/fxml/account-creation-view.fxml"),
     START("/fxml/start-view.fxml"),
     MODE_SELECTION("/fxml/mode-selection-view.fxml"),
     LEARNING_ENTITIES("/fxml/learning-entity-selection-view.fxml"),

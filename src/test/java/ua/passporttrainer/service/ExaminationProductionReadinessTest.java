@@ -127,6 +127,7 @@ class ExaminationProductionReadinessTest {
         return new QuizSessionCoordinator(
                 new GeneratedQuestionSetProvider(context.quizGenerationService()),
                 new QuizSessionLifecycleService(CLOCK),
+                () -> QuizSessionCoordinator.ANONYMOUS_USER_ID,
                 () -> sessionId,
                 () -> FIXED_SEED
         );

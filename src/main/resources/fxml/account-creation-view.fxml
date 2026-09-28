@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.PasswordField?>
+<?import javafx.scene.control.TextField?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<VBox xmlns="http://javafx.com/javafx/25"
+      xmlns:fx="http://javafx.com/fxml/1"
+      fx:controller="ua.passporttrainer.controller.AccountCreationController"
+      alignment="CENTER" spacing="16.0" styleClass="screen-root">
+    <padding>
+        <Insets top="28.0" right="28.0" bottom="28.0" left="28.0" />
+    </padding>
+    <Label styleClass="screen-title" text="%account.creationTitle" />
+    <Label maxWidth="560.0" styleClass="support-label" text="%account.creationDescription"
+           textAlignment="CENTER" wrapText="true" />
+    <GridPane hgap="12.0" maxWidth="520.0" styleClass="content-panel, account-panel" vgap="12.0">
+        <Label styleClass="support-label" text="%account.username" GridPane.columnIndex="0" GridPane.rowIndex="0" />
+        <TextField fx:id="usernameField" promptText="%account.usernamePrompt"
+                   GridPane.columnIndex="1" GridPane.rowIndex="0" />
+        <Label styleClass="support-label" text="%account.displayName" GridPane.columnIndex="0" GridPane.rowIndex="1" />
+        <TextField fx:id="displayNameField" promptText="%account.displayNamePrompt"
+                   GridPane.columnIndex="1" GridPane.rowIndex="1" />
+        <Label styleClass="support-label" text="%account.password" GridPane.columnIndex="0" GridPane.rowIndex="2" />
+        <PasswordField fx:id="passwordField" promptText="%account.passwordPrompt"
+                       GridPane.columnIndex="1" GridPane.rowIndex="2" />
+        <Label styleClass="support-label" text="%account.passwordConfirmation" GridPane.columnIndex="0" GridPane.rowIndex="3" />
+        <PasswordField fx:id="passwordConfirmationField" promptText="%account.passwordConfirmationPrompt"
+                       GridPane.columnIndex="1" GridPane.rowIndex="3" />
+    </GridPane>
+    <Label fx:id="errorLabel" maxWidth="520.0" styleClass="error-label"
+           textAlignment="CENTER" wrapText="true" />
+    <HBox alignment="CENTER" spacing="10.0">
+        <Button fx:id="backButton" onAction="#goBack" text="%common.back" />
+        <Button fx:id="createUserButton" defaultButton="true" onAction="#createAccount"
+                styleClass="primary-button" text="%account.create" />
+    </HBox>
+</VBox>

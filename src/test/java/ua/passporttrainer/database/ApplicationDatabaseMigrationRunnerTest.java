@@ -35,8 +35,13 @@ class ApplicationDatabaseMigrationRunnerTest {
                     scalarInt(statement, "SELECT MAX(version) FROM application_schema_migrations")
             );
             assertEquals(
-                    1,
+                    2,
                     scalarInt(statement, "SELECT COUNT(*) FROM application_schema_migrations")
+            );
+            assertEquals(
+                    1,
+                    scalarInt(statement, "SELECT COUNT(*) FROM sqlite_schema "
+                            + "WHERE type = 'table' AND name = 'users'")
             );
             assertEquals(
                     1,
@@ -68,7 +73,7 @@ class ApplicationDatabaseMigrationRunnerTest {
         try (Connection connection = provider.getConnection();
              Statement statement = connection.createStatement()) {
             assertEquals(
-                    2,
+                    3,
                     scalarInt(statement, "SELECT COUNT(*) FROM application_schema_migrations")
             );
             assertEquals(

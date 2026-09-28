@@ -33,6 +33,7 @@ public final class PassportTrainerApplication extends Application {
         ApplicationLocations locations = ApplicationLocations.fromSystemProperties();
         PassportImageLocator imageLocator = new FileSystemPassportImageLocator(locations.passportAssetsRoot());
         ApplicationControllerFactory controllerFactory;
+        View initialView = View.START;
         try {
             ApplicationDatabaseContext applicationDatabaseContext =
                     ApplicationDatabaseContext.open(locations.applicationDatabasePath());
@@ -44,6 +45,9 @@ public final class PassportTrainerApplication extends Application {
             QuizSessionCoordinator sessionCoordinator = new QuizSessionCoordinator(
                     new GeneratedQuestionSetProvider(catalogueContext.quizGenerationService()),
                     new QuizSessionLifecycleService(sessionClock),
+                    () -> applicationDatabaseContext.currentUserSession().currentUserIdOr(
+                            QuizSessionCoordinator.ANONYMOUS_USER_ID
+                    ),
                     sessionIds::incrementAndGet,
                     sessionSeeds::nextLong
             );
@@ -51,10 +55,15 @@ public final class PassportTrainerApplication extends Application {
                     catalogueContext,
                     sessionCoordinator,
                     applicationDatabaseContext.examResultService(),
+                    applicationDatabaseContext.accountSessionService(),
                     imageLocator,
                     new JavaFxSessionAbandonmentConfirmation(messages),
                     messages
             );
+            initialView = applicationDatabaseContext.accountSessionService()
+                    .initialAdministratorRequired()
+                    ? View.FIRST_RUN_ADMINISTRATOR
+                    : View.LOGIN;
         } catch (IOException | SQLException | RuntimeException exception) {
             controllerFactory = ApplicationControllerFactory.unavailable(
                     exception, imageLocator, messages
@@ -65,7 +74,7 @@ public final class PassportTrainerApplication extends Application {
         primaryStage.setTitle(messages.getString("app.title"));
         primaryStage.setMinWidth(800);
         primaryStage.setMinHeight(560);
-        navigationService.show(View.START);
+        navigationService.show(initialView);
         primaryStage.show();
     }
 

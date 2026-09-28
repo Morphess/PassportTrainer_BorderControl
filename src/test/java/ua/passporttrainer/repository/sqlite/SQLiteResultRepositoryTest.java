@@ -2,7 +2,9 @@ package ua.passporttrainer.repository.sqlite;
 
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
@@ -15,12 +17,16 @@ import ua.passporttrainer.database.SQLiteConnectionProvider;
 import ua.passporttrainer.model.AssessmentProvenance;
 import ua.passporttrainer.model.AssessmentSource;
 import ua.passporttrainer.model.ExamResult;
+import ua.passporttrainer.model.NewUser;
+import ua.passporttrainer.model.User;
+import ua.passporttrainer.model.UserRole;
 import ua.passporttrainer.repository.RepositoryAccessException;
 import ua.passporttrainer.repository.ResultRepository;
 import ua.passporttrainer.service.StatisticsService;
 
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -62,18 +68,23 @@ class SQLiteResultRepositoryTest {
     }
 
     @Test
-    void roundTripsAuthoredProvenanceAndSupportsStatisticsReads() throws Exception {
+    void roundTripsOwnedAuthoredProvenanceAndReadsHistoryAfterDeactivation()
+            throws Exception {
         Path database = temporaryDirectory.resolve("authored.sqlite");
         ApplicationDatabaseContext context = ApplicationDatabaseContext.open(database);
+        User owner = context.userRepository().create(new NewUser(
+                "owner", "Result Owner", "encoded-test-hash", UserRole.USER, STARTED
+        ));
         AssessmentProvenance provenance = new AssessmentProvenance(
                 "test:border-basics", "version:2026-09"
         );
         ExamResult older = result(
-                11, 42L, 101, AssessmentSource.AUTHORED, Optional.of(provenance), 6
+                11, owner.id(), 101, AssessmentSource.AUTHORED,
+                Optional.of(provenance), 6
         );
         ExamResult newer = new ExamResult(
                 12,
-                42L,
+                owner.id(),
                 102,
                 AssessmentSource.AUTHORED,
                 Optional.of(provenance),
@@ -84,17 +95,43 @@ class SQLiteResultRepositoryTest {
         );
         context.resultRepository().save(older);
         context.resultRepository().save(newer);
+        User deactivated = context.userRepository().update(new User(
+                owner.id(),
+                owner.username(),
+                owner.displayName(),
+                owner.passwordHash(),
+                owner.role(),
+                false,
+                owner.createdAt(),
+                COMPLETED.plusSeconds(1_200)
+        ));
 
-        List<ExamResult> results = context.statisticsService().findResults(42);
+        List<ExamResult> results = context.statisticsService().findResults(owner.id());
         StatisticsService separatelyComposed = new StatisticsService(context.resultRepository());
 
         assertAll(
+                () -> assertFalse(deactivated.active()),
                 () -> assertEquals(List.of(newer, older), results),
-                () -> assertEquals(Optional.of(provenance), results.getFirst().assessmentProvenance()),
+                () -> assertEquals(owner.id(), results.getFirst().userId()),
+                () -> assertEquals(
+                        Optional.of(provenance),
+                        results.getFirst().assessmentProvenance()
+                ),
                 () -> assertEquals(
                         70.0,
-                        separatelyComposed.averageScorePercent(42).orElseThrow()
+                        separatelyComposed.averageScorePercent(owner.id()).orElseThrow()
                 )
+        );
+        try (Connection connection = new SQLiteConnectionProvider(database).getConnection();
+             PreparedStatement statement = connection.prepareStatement(
+                     "DELETE FROM users WHERE id = ?"
+             )) {
+            statement.setLong(1, owner.id());
+            assertThrows(SQLException.class, statement::executeUpdate);
+        }
+        assertEquals(
+                List.of(newer, older),
+                context.resultRepository().findByUserId(owner.id())
         );
     }
 
