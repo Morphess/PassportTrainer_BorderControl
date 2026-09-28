@@ -40,6 +40,8 @@ public final class StartController {
     @FXML
     private Button modeSelectionButton;
     @FXML
+    private Button resultsButton;
+    @FXML
     private Button logoutButton;
     @FXML
     private Button switchUserButton;
@@ -68,11 +70,13 @@ public final class StartController {
         Objects.requireNonNull(mapStatusLabel, "mapStatusLabel was not injected");
         Objects.requireNonNull(catalogueButton, "catalogueButton was not injected");
         Objects.requireNonNull(modeSelectionButton, "modeSelectionButton was not injected");
+        Objects.requireNonNull(resultsButton, "resultsButton was not injected");
         Objects.requireNonNull(mapButton, "mapButton was not injected");
         Objects.requireNonNull(currentUserLabel, "currentUserLabel was not injected");
         Objects.requireNonNull(logoutButton, "logoutButton was not injected");
         Objects.requireNonNull(switchUserButton, "switchUserButton was not injected");
         modeSelectionButton.setDisable(!catalogueAvailable);
+        resultsButton.setDisable(accountSessionService.isEmpty());
         catalogueButton.setDisable(!catalogueAvailable);
         mapButton.setDisable(!mapAvailable);
         statusLabel.setText(resources.getString(
@@ -124,6 +128,13 @@ public final class StartController {
                 user.displayName(),
                 resources.getString("account.role." + user.role().name())
         ));
+    }
+
+    @FXML
+    private void openResults() {
+        if (accountSessionService.isPresent()) {
+            navigationService.show(View.MY_RESULTS);
+        }
     }
 
     @FXML

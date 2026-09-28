@@ -289,3 +289,22 @@
     -fx-font-weight: bold;
     -fx-text-fill: #f8fafc;
 }
+
+.results-content {
+    -fx-padding: 24px 0 18px 0;
+}
+
+.results-statistics-panel .result-value {
+    -fx-font-size: 17px;
+}
+
+.results-content .table-view {
+    -fx-background-color: #f8fafc;
+    -fx-border-color: #64748b;
+    -fx-border-radius: 6px;
+    -fx-background-radius: 6px;
+}
+
+.results-content .table-cell {
+    -fx-padding: 9px 10px;
+}

@@ -21,6 +21,7 @@
         <Label fx:id="mapStatusLabel" styleClass="status-label" text="%app.initializationMessage" />
         <Button fx:id="modeSelectionButton" onAction="#openModeSelection"
                 text="%start.openModes" />
+        <Button fx:id="resultsButton" onAction="#openResults" text="%results.open" />
         <Button fx:id="mapButton" defaultButton="true" onAction="#openWorldMap"
                 styleClass="primary-button" text="%start.openWorldMap" />
         <Button fx:id="catalogueButton" onAction="#openCatalogue"

@@ -8,6 +8,7 @@ public enum View {
     LOGIN("/fxml/login-view.fxml"),
     ACCOUNT_CREATION("/fxml/account-creation-view.fxml"),
     START("/fxml/start-view.fxml"),
+    MY_RESULTS("/fxml/my-results-view.fxml"),
     MODE_SELECTION("/fxml/mode-selection-view.fxml"),
     LEARNING_ENTITIES("/fxml/learning-entity-selection-view.fxml"),
     LEARNING_BROWSER("/fxml/learning-browser-view.fxml"),

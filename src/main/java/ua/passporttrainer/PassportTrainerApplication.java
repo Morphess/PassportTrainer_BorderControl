@@ -56,6 +56,7 @@ public final class PassportTrainerApplication extends Application {
                     sessionCoordinator,
                     applicationDatabaseContext.examResultService(),
                     applicationDatabaseContext.accountSessionService(),
+                    applicationDatabaseContext.currentUserResultsService(),
                     imageLocator,
                     new JavaFxSessionAbandonmentConfirmation(messages),
                     messages

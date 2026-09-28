@@ -11,6 +11,7 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.PasswordField;
+import javafx.scene.control.TableView;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.ToggleButton;
@@ -51,6 +52,7 @@ import ua.passporttrainer.model.QuizSessionLifecycle;
 import ua.passporttrainer.model.User;
 import ua.passporttrainer.model.UserRole;
 import ua.passporttrainer.presentation.LearningEntityPresentation;
+import ua.passporttrainer.presentation.ResultHistoryItemPresentation;
 import ua.passporttrainer.presentation.TrainingScopePresentation;
 import ua.passporttrainer.navigation.NavigationService;
 import ua.passporttrainer.navigation.View;
@@ -64,12 +66,15 @@ import ua.passporttrainer.security.PasswordHasher;
 import ua.passporttrainer.service.ExamResultService;
 import ua.passporttrainer.service.AccountSessionService;
 import ua.passporttrainer.service.AuthenticationService;
+import ua.passporttrainer.service.AuthorizationService;
+import ua.passporttrainer.service.CurrentUserResultsService;
 import ua.passporttrainer.service.ExaminationConfigurationFactory;
 import ua.passporttrainer.service.GeneratedQuestionSetProvider;
 import ua.passporttrainer.service.PassportService;
 import ua.passporttrainer.service.QuizGenerationService;
 import ua.passporttrainer.service.QuizSessionCoordinator;
 import ua.passporttrainer.service.QuizSessionLifecycleService;
+import ua.passporttrainer.service.StatisticsService;
 import ua.passporttrainer.service.UserAccountService;
 
 import java.nio.file.Path;
@@ -97,6 +102,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -153,6 +159,7 @@ class CatalogueUiSmokeTest {
                         coordinator,
                         application.examResultService(),
                         application.accountSessionService(),
+                        application.currentUserResultsService(),
                         new FileSystemPassportImageLocator(temporaryDirectory),
                         ignored -> true,
                         RESOURCES
@@ -230,6 +237,97 @@ class CatalogueUiSmokeTest {
     }
 
     @Test
+    void administratorAndUserLoginOpenOwnEmptyResults() throws Exception {
+        Path catalogueDatabase = temporaryDirectory.resolve("empty-results-catalogue.sqlite");
+        Path applicationDatabase = temporaryDirectory.resolve("empty-results-application.sqlite");
+        CatalogueTestSupport.importCatalogue(catalogueDatabase);
+        CatalogueApplicationContext catalogue =
+                CatalogueApplicationContext.openReadOnly(catalogueDatabase);
+        ApplicationDatabaseContext application =
+                ApplicationDatabaseContext.open(applicationDatabase);
+        char[] password = "correct password".toCharArray();
+        application.userAccountService().createInitialAdministrator(
+                "admin", "Administrator", password, password
+        );
+        application.userAccountService().createOrdinaryAccount(
+                "learner", "Learner", password, password
+        );
+        QuizSessionCoordinator coordinator = sessionCoordinator(
+                catalogue,
+                () -> application.currentUserSession().currentUserIdOr(
+                        QuizSessionCoordinator.ANONYMOUS_USER_ID
+                )
+        );
+
+        onFxThread(() -> {
+            Stage stage = new Stage();
+            try {
+                ApplicationControllerFactory factory = ApplicationControllerFactory.available(
+                        catalogue,
+                        coordinator,
+                        application.examResultService(),
+                        application.accountSessionService(),
+                        application.currentUserResultsService(),
+                        new FileSystemPassportImageLocator(temporaryDirectory),
+                        ignored -> true,
+                        RESOURCES
+                );
+                NavigationService navigation = new NavigationService(stage, RESOURCES, factory);
+                navigation.show(View.LOGIN);
+                stage.show();
+
+                Parent loginRoot = stage.getScene().getRoot();
+                control(loginRoot, "#usernameField", TextField.class).setText("admin");
+                control(loginRoot, "#passwordField", PasswordField.class)
+                        .setText("correct password");
+                control(loginRoot, "#loginButton", Button.class).fire();
+                Parent adminStart = stage.getScene().getRoot();
+                control(adminStart, "#resultsButton", Button.class).fire();
+                Parent adminResults = stage.getScene().getRoot();
+                assertEquals(
+                        RESOURCES.getString("results.empty"),
+                        control(adminResults, "#statusLabel", Label.class).getText()
+                );
+                assertEquals(
+                        "0",
+                        control(
+                                adminResults, "#completedExaminationsLabel", Label.class
+                        ).getText()
+                );
+                assertTrue(control(
+                        adminResults, "#resultsTable", TableView.class
+                ).getItems().isEmpty());
+                control(adminResults, "#backButton", Button.class).fire();
+                control(stage.getScene().getRoot(), "#switchUserButton", Button.class).fire();
+
+                loginRoot = stage.getScene().getRoot();
+                control(loginRoot, "#usernameField", TextField.class).setText("learner");
+                control(loginRoot, "#passwordField", PasswordField.class)
+                        .setText("correct password");
+                control(loginRoot, "#loginButton", Button.class).fire();
+                Parent userStart = stage.getScene().getRoot();
+                control(userStart, "#resultsButton", Button.class).fire();
+                Parent userResults = stage.getScene().getRoot();
+                assertEquals(
+                        RESOURCES.getString("results.empty"),
+                        control(userResults, "#statusLabel", Label.class).getText()
+                );
+                assertEquals(
+                        "0",
+                        control(
+                                userResults, "#completedExaminationsLabel", Label.class
+                        ).getText()
+                );
+                assertTrue(control(
+                        userResults, "#resultsTable", TableView.class
+                ).getItems().isEmpty());
+            } finally {
+                stage.close();
+            }
+        });
+    }
+
+    @Test
     void anonymousThenLoginCompletesUserOwnedExaminationAndLogsOut() throws Exception {
         Path catalogueDatabase = temporaryDirectory.resolve("login-exam-catalogue.sqlite");
         Path applicationDatabase = temporaryDirectory.resolve("login-exam-application.sqlite");
@@ -262,6 +360,7 @@ class CatalogueUiSmokeTest {
                     coordinator,
                     application.examResultService(),
                     application.accountSessionService(),
+                    application.currentUserResultsService(),
                     new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                     ignored -> true,
                     RESOURCES
@@ -278,6 +377,17 @@ class CatalogueUiSmokeTest {
                     control(anonymousRoot, "#currentUserLabel", Label.class).getText()
             );
             assertTrue(application.accountSessionService().currentUser().isEmpty());
+            control(anonymousRoot, "#resultsButton", Button.class).fire();
+            Parent guestResults = stage.getScene().getRoot();
+            assertEquals(
+                    RESOURCES.getString("results.guest"),
+                    control(guestResults, "#statusLabel", Label.class).getText()
+            );
+            assertTrue(control(
+                    guestResults, "#resultsTable", TableView.class
+            ).getItems().isEmpty());
+            control(guestResults, "#backButton", Button.class).fire();
+            anonymousRoot = stage.getScene().getRoot();
             control(anonymousRoot, "#switchUserButton", Button.class).fire();
 
             loginRoot = stage.getScene().getRoot();
@@ -339,6 +449,52 @@ class CatalogueUiSmokeTest {
 
             control(resultRoot, "#mainMenuButton", Button.class).fire();
             Parent startRoot = stage.getScene().getRoot();
+            control(startRoot, "#resultsButton", Button.class).fire();
+            Parent historyRoot = stage.getScene().getRoot();
+            TableView<?> historyTable = control(
+                    historyRoot, "#resultsTable", TableView.class
+            );
+            assertEquals(1, historyTable.getItems().size());
+            ResultHistoryItemPresentation historyItem =
+                    (ResultHistoryItemPresentation) historyTable.getItems().getFirst();
+            assertAll(
+                    () -> assertEquals("Екзамен · згенерований", historyItem.assessment()),
+                    () -> assertEquals("10", historyItem.totalQuestions()),
+                    () -> assertEquals("10", historyItem.correctAnswers()),
+                    () -> assertEquals("100%", historyItem.percentage()),
+                    () -> assertEquals("0 с", historyItem.duration()),
+                    () -> assertFalse(historyItem.completedAt().isBlank()),
+                    () -> assertEquals(
+                            "1",
+                            control(
+                                    historyRoot,
+                                    "#completedExaminationsLabel",
+                                    Label.class
+                            ).getText()
+                    ),
+                    () -> assertEquals(
+                            "100%",
+                            control(
+                                    historyRoot, "#averagePercentageLabel", Label.class
+                            ).getText()
+                    ),
+                    () -> assertEquals(
+                            "100%",
+                            control(
+                                    historyRoot, "#bestPercentageLabel", Label.class
+                            ).getText()
+                    ),
+                    () -> assertEquals(
+                            "10",
+                            control(historyRoot, "#totalAnsweredLabel", Label.class).getText()
+                    ),
+                    () -> assertEquals(
+                            "10",
+                            control(historyRoot, "#totalCorrectLabel", Label.class).getText()
+                    )
+            );
+            control(historyRoot, "#backButton", Button.class).fire();
+            startRoot = stage.getScene().getRoot();
             control(startRoot, "#logoutButton", Button.class).fire();
 
             assertNotNull(stage.getScene().getRoot().lookup("#loginButton"));
@@ -381,6 +537,7 @@ class CatalogueUiSmokeTest {
                                 coordinator,
                                 examResultService(),
                                 accountAccess,
+                                currentUserResultsService(),
                                 new FileSystemPassportImageLocator(
                                         Path.of("Зразки паспортних документів")
                                 ),
@@ -434,6 +591,7 @@ class CatalogueUiSmokeTest {
                         sessionCoordinator(context),
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -532,6 +690,7 @@ class CatalogueUiSmokeTest {
                         sessionCoordinator(context),
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -592,6 +751,7 @@ class CatalogueUiSmokeTest {
                         sessionCoordinator(context),
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(emptyAssetRoot),
                         ignored -> true,
                         RESOURCES
@@ -685,6 +845,7 @@ class CatalogueUiSmokeTest {
                         sessionCoordinator(context),
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -741,6 +902,7 @@ class CatalogueUiSmokeTest {
                         sessionCoordinator(context),
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -845,6 +1007,7 @@ class CatalogueUiSmokeTest {
                         sessionCoordinator(context),
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -969,6 +1132,7 @@ class CatalogueUiSmokeTest {
                         sessionCoordinator(context),
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(temporaryDirectory),
                         ignored -> true,
                         resourcesWithoutMapGroupLabel()
@@ -1041,6 +1205,7 @@ class CatalogueUiSmokeTest {
                         coordinator,
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -1145,6 +1310,7 @@ class CatalogueUiSmokeTest {
                                 sessionCoordinator(context),
                                 examResultService(),
                                 accountSessionService(),
+                                currentUserResultsService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1306,6 +1472,7 @@ class CatalogueUiSmokeTest {
                     coordinator,
                     new ExamResultService(resultRepository),
                     accountSessionService(),
+                    currentUserResultsService(),
                     new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                     ignored -> true,
                     RESOURCES
@@ -1434,6 +1601,7 @@ class CatalogueUiSmokeTest {
                             coordinator,
                             examResultService(),
                             accountSessionService(),
+                            currentUserResultsService(),
                             new FileSystemPassportImageLocator(
                                     Path.of("Зразки паспортних документів")
                             ),
@@ -1509,6 +1677,7 @@ class CatalogueUiSmokeTest {
                                 coordinator,
                                 examResultService(),
                                 accountSessionService(),
+                                currentUserResultsService(),
                                 new FileSystemPassportImageLocator(
                                         Path.of("Зразки паспортних документів")
                                 ),
@@ -1566,6 +1735,7 @@ class CatalogueUiSmokeTest {
                                 coordinator,
                                 examResultService(),
                                 accountSessionService(),
+                                currentUserResultsService(),
                                 new FileSystemPassportImageLocator(
                                         Path.of("Зразки паспортних документів")
                                 ),
@@ -1796,6 +1966,7 @@ class CatalogueUiSmokeTest {
                         coordinator,
                         examResultService(),
                         accountSessionService(),
+                        currentUserResultsService(),
                         new FileSystemPassportImageLocator(Path.of("Зразки паспортних документів")),
                         ignored -> true,
                         RESOURCES
@@ -1907,6 +2078,7 @@ class CatalogueUiSmokeTest {
                                 sessionCoordinator(context),
                                 examResultService(),
                                 accountSessionService(),
+                                currentUserResultsService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1943,6 +2115,7 @@ class CatalogueUiSmokeTest {
                                 sessionCoordinator(context),
                                 examResultService(),
                                 accountSessionService(),
+                                currentUserResultsService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -1983,6 +2156,7 @@ class CatalogueUiSmokeTest {
                                 sessionCoordinator(context),
                                 examResultService(),
                                 accountSessionService(),
+                                currentUserResultsService(),
                                 new FileSystemPassportImageLocator(temporaryDirectory),
                                 ignored -> true,
                                 RESOURCES
@@ -2014,6 +2188,7 @@ class CatalogueUiSmokeTest {
                 coordinator,
                 examResultService(),
                 accountSessionService(),
+                currentUserResultsService(),
                 imageLocator,
                 abandonmentConfirmation,
                 RESOURCES
@@ -2106,6 +2281,16 @@ class CatalogueUiSmokeTest {
 
     private static ExamResultService examResultService() {
         return new ExamResultService(new TestResultRepository(false));
+    }
+
+    private static CurrentUserResultsService currentUserResultsService() {
+        CurrentUserSession currentUserSession = new CurrentUserSession();
+        UserRepository userRepository = new TestUserRepository();
+        return new CurrentUserResultsService(
+                currentUserSession,
+                new AuthorizationService(currentUserSession, userRepository),
+                new StatisticsService(new TestResultRepository(false))
+        );
     }
 
     private static AccountSessionService accountSessionService() {

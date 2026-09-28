@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.geometry.Insets?>
+<?import javafx.scene.control.Button?>
+<?import javafx.scene.control.Label?>
+<?import javafx.scene.control.TableColumn?>
+<?import javafx.scene.control.TableView?>
+<?import javafx.scene.layout.BorderPane?>
+<?import javafx.scene.layout.GridPane?>
+<?import javafx.scene.layout.HBox?>
+<?import javafx.scene.layout.VBox?>
+
+<BorderPane xmlns="http://javafx.com/javafx/25"
+            xmlns:fx="http://javafx.com/fxml/1"
+            fx:controller="ua.passporttrainer.controller.MyResultsController"
+            styleClass="screen-root">
+    <padding>
+        <Insets top="28.0" right="28.0" bottom="28.0" left="28.0" />
+    </padding>
+    <top>
+        <VBox alignment="CENTER" spacing="8.0">
+            <Label styleClass="screen-title" text="%results.title" />
+            <Label styleClass="support-label" text="%results.description" wrapText="true" />
+        </VBox>
+    </top>
+    <center>
+        <VBox maxWidth="1050.0" spacing="16.0" styleClass="results-content">
+            <VBox fx:id="statisticsPanel" spacing="10.0" styleClass="content-panel, results-statistics-panel">
+                <Label styleClass="section-title" text="%results.statistics.title" />
+                <GridPane hgap="22.0" vgap="8.0">
+                    <Label styleClass="support-label" text="%results.statistics.completed"
+                           GridPane.columnIndex="0" GridPane.rowIndex="0" />
+                    <Label fx:id="completedExaminationsLabel" styleClass="result-value"
+                           GridPane.columnIndex="1" GridPane.rowIndex="0" />
+                    <Label styleClass="support-label" text="%results.statistics.average"
+                           GridPane.columnIndex="2" GridPane.rowIndex="0" />
+                    <Label fx:id="averagePercentageLabel" styleClass="result-value"
+                           GridPane.columnIndex="3" GridPane.rowIndex="0" />
+                    <Label styleClass="support-label" text="%results.statistics.best"
+                           GridPane.columnIndex="4" GridPane.rowIndex="0" />
+                    <Label fx:id="bestPercentageLabel" styleClass="result-value"
+                           GridPane.columnIndex="5" GridPane.rowIndex="0" />
+                    <Label styleClass="support-label" text="%results.statistics.answered"
+                           GridPane.columnIndex="0" GridPane.rowIndex="1" />
+                    <Label fx:id="totalAnsweredLabel" styleClass="result-value"
+                           GridPane.columnIndex="1" GridPane.rowIndex="1" />
+                    <Label styleClass="support-label" text="%results.statistics.correct"
+                           GridPane.columnIndex="2" GridPane.rowIndex="1" />
+                    <Label fx:id="totalCorrectLabel" styleClass="result-value"
+                           GridPane.columnIndex="3" GridPane.rowIndex="1" />
+                </GridPane>
+            </VBox>
+            <Label fx:id="statusLabel" maxWidth="1050.0" textAlignment="CENTER" wrapText="true" />
+            <TableView fx:id="resultsTable" prefHeight="430.0" VBox.vgrow="ALWAYS">
+                <columns>
+                    <TableColumn fx:id="completedAtColumn" minWidth="150.0" text="%results.column.completedAt" />
+                    <TableColumn fx:id="assessmentColumn" minWidth="210.0" text="%results.column.assessment" />
+                    <TableColumn fx:id="totalColumn" minWidth="95.0" text="%results.column.total" />
+                    <TableColumn fx:id="correctColumn" minWidth="105.0" text="%results.column.correct" />
+                    <TableColumn fx:id="percentageColumn" minWidth="105.0" text="%results.column.percentage" />
+                    <TableColumn fx:id="durationColumn" minWidth="110.0" text="%results.column.duration" />
+                </columns>
+            </TableView>
+        </VBox>
+    </center>
+    <bottom>
+        <HBox alignment="CENTER" spacing="12.0">
+            <Button fx:id="backButton" onAction="#goBack" text="%common.back" />
+        </HBox>
+    </bottom>
+</BorderPane>

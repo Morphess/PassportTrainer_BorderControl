@@ -17,6 +17,7 @@ import ua.passporttrainer.security.PasswordHasher;
 import ua.passporttrainer.service.AccountSessionService;
 import ua.passporttrainer.service.AuthenticationService;
 import ua.passporttrainer.service.AuthorizationService;
+import ua.passporttrainer.service.CurrentUserResultsService;
 import ua.passporttrainer.service.ExamResultService;
 import ua.passporttrainer.service.StatisticsService;
 import ua.passporttrainer.service.UserAccountService;
@@ -33,6 +34,7 @@ public final class ApplicationDatabaseContext {
     private final CurrentUserSession currentUserSession;
     private final AccountSessionService accountSessionService;
     private final AuthorizationService authorizationService;
+    private final CurrentUserResultsService currentUserResultsService;
 
     private ApplicationDatabaseContext(
             ResultRepository resultRepository,
@@ -55,6 +57,9 @@ public final class ApplicationDatabaseContext {
                 userAccountService, authenticationService, currentUserSession
         );
         authorizationService = new AuthorizationService(currentUserSession, userRepository);
+        currentUserResultsService = new CurrentUserResultsService(
+                currentUserSession, authorizationService, statisticsService
+        );
     }
 
     public static ApplicationDatabaseContext open(Path databasePath)
@@ -107,5 +112,9 @@ public final class ApplicationDatabaseContext {
 
     public AuthorizationService authorizationService() {
         return authorizationService;
+    }
+
+    public CurrentUserResultsService currentUserResultsService() {
+        return currentUserResultsService;
     }
 }

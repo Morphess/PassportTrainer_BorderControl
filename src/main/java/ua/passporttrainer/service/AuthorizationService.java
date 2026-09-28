@@ -24,15 +24,27 @@ public final class AuthorizationService {
         this.userRepository = Objects.requireNonNull(userRepository, "userRepository");
     }
 
-    public AuthenticatedUser requireAdmin() {
+    public AuthenticatedUser requireActiveUser() {
         AuthenticatedUser principal = currentUserSession.current()
-                .orElseThrow(AuthorizationService::adminRequired);
+                .orElseThrow(AuthorizationService::activeUserRequired);
         User user = userRepository.findById(principal.id())
-                .orElseThrow(AuthorizationService::adminRequired);
-        if (!user.active() || user.role() != UserRole.ADMIN) {
-            throw adminRequired();
+                .orElseThrow(AuthorizationService::activeUserRequired);
+        if (!user.active()) {
+            throw activeUserRequired();
         }
         return AuthenticatedUser.from(user);
+    }
+
+    public AuthenticatedUser requireAdmin() {
+        AuthenticatedUser principal = requireActiveUser();
+        if (principal.role() != UserRole.ADMIN) {
+            throw adminRequired();
+        }
+        return principal;
+    }
+
+    private static AuthorizationException activeUserRequired() {
+        return new AuthorizationException("Active user authentication is required");
     }
 
     private static AuthorizationException adminRequired() {
