@@ -95,16 +95,16 @@ The roadmap preserves the established architecture and product scope. Details re
 - **Stage 12D:** not currently defined; future work continues in Stage 13 and later stages.
 - **Dependencies:** the completed Stage 9 quiz engine, Stage 11 shared mode infrastructure, and Stage 10 reviewed read-only catalogue.
 
-## 11. Users, settings and statistics — Stage 13
+## 11. Users, ownership and statistics — Stage 13
 
-- **Status:** architecture, local user/authentication/session foundation, user/session UI, and bounded personal result-history/statistics UI completed through Stage 13D; Stage 13 integration/release-readiness verification remains.
-- **Goal:** complete local user, configuration, progress, result-history, and statistics capabilities already represented by service/repository boundaries.
-- **Primary result:** persisted users, settings, results, and user-facing statistics without bypassing repository contracts.
+- **Status:** Stage 13 completed through the Stage 13E integration, regression, migration, security-boundary, navigation, and release-baseline pass.
+- **Goal:** complete local users, authentication/session state, Examination result ownership, personal result history, and derived statistics through service/repository boundaries.
+- **Primary result:** persisted users and completed Examination results with isolated user-facing history/statistics; settings remain separately scoped future work.
 - **Delivered in Stage 13A:** minimum local-user/authentication/session/role/statistics architecture preserving existing quiz and result boundaries while keeping future Admin/Question Bank compatible.
 - **Delivered in Stage 13B:** checksummed application V2 users/result-ownership migration; database-generated local users and soft deactivation; canonical username handling; Argon2id hashing and rehash-on-login; generic active-account authentication; password-free current-user session; active-admin authorization boundary; and exactly-once quiz owner capture with anonymous compatibility.
 - **Delivered in Stage 13C:** localized first-run creation of one initial `ADMIN`; ordinary `USER` registration; generic local login or anonymous continuation; compact current-user presentation; logout/switch-user with confirmed active-quiz abandonment; and unchanged exactly-once Examination ownership capture.
 - **Delivered in Stage 13D:** current-active-user-only newest-first Examination history; anonymous guest and authenticated-empty states; persisted-active authorization; derived completed/average/best/answered/correct statistics without aggregate persistence; localized presentation-safe rows; START navigation; and JavaFX coverage for ADMIN/USER empty history plus a persisted owned USER result.
-- **Stage 13E:** Stage 13 integration, upgrade, regression, and release-readiness verification; global/Admin analytics, rankings/comparisons, and authored Question Bank/Admin remain later work.
+- **Delivered in Stage 13E:** clean V001/V002 and V1-upgrade verification; complete first-run/login/anonymous/logout/switch integration; authenticated/anonymous ownership and My Results isolation; Learning/Training/Examination regression; password/principal, inactive-account, repository, navigation, and controller-factory boundary checks; full-suite/package verification; and a clean baseline for separately scoped Admin UI/Question Bank work.
 - **Dependencies:** Stage 4 persistence foundation and stable behavior from Stages 8–12.
 
 ## 12. Windows release — Stage 14

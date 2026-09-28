@@ -323,10 +323,12 @@ Failure to open/migrate the application DB or open/validate the catalogue create
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє immutable source paths;
 - application SQLite integration перевіряє fresh creation, version rejection, transactional V1→V2 anonymous preservation, orphan rollback, user FK enforcement, initial/ordinary account roles, local-user CRUD/deactivation, Argon2id/authentication/session/authorization, real/anonymous result ownership, provenance, one-session idempotency, retry, own-user isolation, inactive/anonymous result denial та in-memory statistics derivation; production Examination integration записує лише temporary application DB і звіряє незмінність catalogue bytes.
 
+Stage 13E integration повторно підтвердила цю композицію на clean V001/V002 DB, V1→V2 upgrade, USER/ADMIN/anonymous account flows, exactly-once Examination ownership, own-user history/statistics isolation та production JavaFX navigation. Learning не отримав user dependency; Training не отримав persistence; Examination не розкриває correctness/score до completion. Full suite і existing Maven package залишаються release baseline без нової migration або architecture path.
+
 ## Що навмисно не реалізовано
 
-- persistent settings;
-- authored/hybrid Question Bank sources and JavaFX Admin editor; Stage 10 review remains a separate editorial CLI;
-- global/Admin analytics, rankings/comparisons і active quiz-session persistence.
+- persistent settings та active quiz-session persistence;
+- authored/hybrid Question Bank sources, authored questions/tests і JavaFX Admin UI;
+- explicit permissions matrix, global/Admin analytics dashboard та rankings/comparisons.
 
 Ці компоненти додаються окремими етапами без порушення зафіксованого напрямку залежностей.

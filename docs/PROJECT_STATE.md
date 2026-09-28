@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after Stage 13D. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after the Stage 13E integration and release-readiness pass. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -64,7 +64,7 @@ This document records the repository state after Stage 13D. It distinguishes imp
 - Versioned SQLite schema creation and deterministic manifest ingestion are implemented; Windows packaging of the read-only catalogue and passport assets remains a later release concern.
 - Learning remains passive and non-scored; Training and active quiz sessions remain in-memory and non-persistent; only completed Examination summaries are persisted.
 - Training immediate disclosure and Examination non-disclosure are enforced through `QuizModePolicy` and the shared coordinator/question controller.
-- Persistent users, authentication, first-run/account/login/logout/switch UI, current-user state, roles, result ownership, and personal result-history/statistics UI are implemented; settings, authored Question Bank/Admin UI, active-session persistence, and global/Admin analytics remain unimplemented.
+- Stage 13 local users, authentication, first-run/account/login/logout/switch UI, `CurrentUserSession`, `USER`/`ADMIN` role foundation, result ownership, My Results, and derived personal statistics are implemented; Admin UI, Question Bank, authored questions/tests, a permissions matrix, an analytics dashboard, settings, and active-session persistence remain future work.
 - Localization infrastructure covers the implemented account, personal-results/statistics, catalogue, interactive-map, mode-selection, Learning, Training, and generated Examination flows in the default resource bundle; additional locales are not present.
 
 ### Not implemented
@@ -281,6 +281,15 @@ Stage 13D verification established that:
 - ADMIN and USER login smokes show their own empty state, anonymous access shows a guest state, and a completed USER Examination appears only in that user's history with matching summary statistics;
 - global/Admin analytics, rankings/comparisons, authored Question Bank/Admin work, settings, active-session persistence, password recovery, and network services remain outside Stage 13D.
 
+Stage 13E finalization established that:
+
+- fresh application databases apply checksummed V001/V002 exactly once; V1 anonymous results retain `NULL` ownership, unknown non-null owners fail without partial V2 state, and current foreign keys reject orphan result ownership;
+- first-run ADMIN creation, USER/ADMIN login, anonymous entry, logout, switch-user, inactive-account denial, active-session abandonment confirmation, START identity, and My Results guest/empty/owned states pass through the production JavaFX navigation/controller factory;
+- anonymous Examination remains runtime `0L` and persisted `NULL`; authenticated ownership is captured once at session start, survives logout after completion, and is isolated to the owning account's history;
+- Learning remains passive and user-independent, Training retains immediate feedback and in-memory-only results, and Examination retains active-score nondisclosure, completion-only disclosure, persistence, and history presentation;
+- controllers have no `UserRepository`/`ResultRepository` dependency, principals remain password-free, password arrays/fields are cleared, `AuthorizationService` retains active-user and ADMIN boundaries, `NavigationService` remains the only FXML loader/navigation owner, and `ApplicationControllerFactory` remains the only controller-construction boundary;
+- Stage 13 closes with the 234-test suite and existing Maven package green, no schema redesign, no new feature scope, and no passport/catalogue/review/manifest/metadata changes.
+
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
@@ -314,8 +323,8 @@ Source files must remain unchanged. SQLite catalogue ingestion consumes the cano
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and runtime flow; Stage 9 added quiz generation; Stage 10 added editorial review/activation and deterministic read-only catalogue materialization; Stage 11 added shared Learning/Training/Examination lifecycle infrastructure; Stages 12B–12C completed generated Examination runtime/UI and result persistence; Stages 13B–13D added local users/authentication/session/ownership, account UI, and personal result-history/statistics.
+- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and runtime flow; Stage 9 added quiz generation; Stage 10 added editorial review/activation and deterministic read-only catalogue materialization; Stage 11 added shared Learning/Training/Examination lifecycle infrastructure; Stages 12B–12C completed generated Examination runtime/UI and result persistence; Stages 13B–13E delivered and integration-verified local users/authentication/session/ownership, account UI, and personal result-history/statistics.
 
 ### Immediate next step
 
-Stage 13D personal result history/statistics is complete. The next planned pass is Stage 13E integration, upgrade, regression, and release-readiness verification; global/Admin analytics, authored Question Bank/Admin, active-session persistence, and Windows packaging remain later work.
+Stage 13 is complete and provides the stable user/authentication/result/statistics baseline. The next feature-development pass should explicitly scope Admin UI and Question Bank architecture, authored questions/tests, a permissions matrix, and an analytics dashboard; persistent settings, active-session persistence, password recovery, network services, and Windows packaging remain separate future work.
