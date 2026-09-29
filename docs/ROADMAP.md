@@ -107,7 +107,17 @@ The roadmap preserves the established architecture and product scope. Details re
 - **Delivered in Stage 13E:** clean V001/V002 and V1-upgrade verification; complete first-run/login/anonymous/logout/switch integration; authenticated/anonymous ownership and My Results isolation; Learning/Training/Examination regression; password/principal, inactive-account, repository, navigation, and controller-factory boundary checks; full-suite/package verification; and a clean baseline for separately scoped Admin UI/Question Bank work.
 - **Dependencies:** Stage 4 persistence foundation and stable behavior from Stages 8–12.
 
-## 12. Windows release — Stage 14
+## 12. Admin and Question Bank — Stage 14
+
+- **Status:** Stage 14A architecture gate and Stage 14B.1 database/domain foundation completed; no Admin workflow or UI is implemented.
+- **Goal:** add authored questions, media, assessments, and generated/authored/hybrid execution without coupling runtime quiz state to Admin persistence.
+- **Delivered in Stage 14A:** Admin authorization/service/repository boundaries, authored content/versioning model, source-provider strategy, media ownership, result compatibility, and staged implementation decisions.
+- **Delivered in Stage 14B.1:** checksummed application V3 foundation tables; immutable authored Question/Version/Option, media, and minimal assessment models; persistence-only repository contracts; transactional fresh/V2 upgrade and rollback coverage; unchanged generated quiz and passport-catalogue boundaries.
+- **Stage 14B.2:** SQLite repository implementations and authorization-aware Admin command services; no JavaFX UI.
+- **Later Stage 14:** Question Bank/media workflows, assessment builder/version publication, Admin UI, authored/hybrid runtime integration, and final regression.
+- **Dependencies:** Stage 13 users/authorization/results and the Stage 12 question-provider/result-provenance boundaries.
+
+## 13. Windows release — Stage 15
 
 - **Goal:** deliver and verify the application on its target Windows platform.
 - **Primary result:** a self-contained Windows runtime/package with verified startup, writable user-data placement, resources, and upgrade/install behavior.

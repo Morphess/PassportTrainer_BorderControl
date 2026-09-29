@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after the Stage 13E integration and release-readiness pass. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after the Stage 14B.1 Admin database/domain foundation pass. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -26,13 +26,13 @@ This document records the repository state after the Stage 13E integration and r
 - Strict map resource loading and validation covering 249 geometry records, 135 explicit canonical links, 114 intentionally unlinked geographic regions, and 4 list-only entities so that all 139 canonical entities remain reachable without runtime name matching.
 - Native JavaFX map interaction with six presentation groups over the seven canonical continents, dateline-aware Australia/Oceania focus, hover/review/no-data/selection states, bounded zoom and pan, reset, keyboard activation, Unicode fallback search, and localized accessible labels and tooltips.
 - Central FXML loading, constructor-injected controller creation, scene-root replacement, shared CSS, instance-local navigation history, root replacement without history growth, and history-reset navigation through `NavigationService`.
-- JDK-only domain records and enums for countries, passports, users, quiz sessions, validated ordered question sets with optional assessment provenance, accepted session configuration, explicit session lifecycle, answers, results, typed quiz content, quiz-generation requests, and structured generation failures; catalogue and quiz identities use stable Stage 5 text IDs, while presentation labels remain separate.
+- JDK-only domain records and enums for countries, passports, users, quiz sessions, validated ordered question sets with optional assessment provenance, authored Question/QuestionVersion/QuestionOption content, media metadata, minimal assessment definitions, answers, results, typed quiz content, quiz-generation requests, and structured generation failures; editable authored content remains separate from runtime `QuizQuestion`.
 - The authoritative `DocumentType` contract is `ORDINARY_PASSPORT`, `DIPLOMATIC_PASSPORT`, `SERVICE_PASSPORT`, `NATIONAL_ID`, and `UNKNOWN`.
 - The authoritative `QuizQuestionType` contract is `PASSPORT_TO_COUNTRY`, `COUNTRY_TO_PASSPORT`, `DOCUMENT_TYPE`, and `FIND_ORDINARY_PASSPORT`.
-- Repository interfaces for continents, countries, passports, users, results, and settings; `PassportRepository` includes one bounded quiz-candidate read.
+- Repository interfaces for continents, countries, passports, users, results, settings, authored questions/versions, media metadata, and assessments; `PassportRepository` includes one bounded quiz-candidate read.
 - Service-layer classes using constructor injection, including catalogue browsing by canonical continent membership.
 - `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
-- A separate writable per-user application SQLite database, created from checksummed application migrations independently of the strictly read-only passport catalogue; application V2 adds local users and referential result ownership.
+- A separate writable per-user application SQLite database, created from checksummed application migrations independently of the strictly read-only passport catalogue; application V2 adds local users and referential result ownership, while V3 adds only the Admin content foundation.
 - Separate quiz-session lifecycle and examination-result boundaries: `QuizSessionLifecycleService` owns in-memory session correctness/completion, while `ExamResultService` is the sole result writer through `ResultRepository`; `SQLiteResultRepository` provides transactional idempotent persistence and shared `StatisticsService` reads.
 - Local accounts with database-generated user IDs, canonical Unicode usernames, mutable display names, `USER`/`ADMIN` roles, soft deactivation, transactional `SQLiteUserRepository`, Argon2id password hashing, generic authentication failure, transparent rehash-on-login, password-free principals, in-memory `CurrentUserSession`, and persisted-active account/admin authorization boundaries.
 - Localized first-run creation of exactly one initial `ADMIN`, ordinary `USER` registration, login or anonymous continuation, compact current-user presentation, and logout/switch-user navigation; active quiz exit reuses the existing abandonment confirmation and never transfers a session.
@@ -44,12 +44,12 @@ This document records the repository state after the Stage 13E integration and r
 - A complete non-persistent Training Mode UI: global or country-scoped configuration, all four generated question types across image/text and image-card layouts, safe image gating, authoritative immediate feedback, in-place progression, completion/result summary, restart, new configuration, main-menu reset, and confirmed abandonment.
 - A complete generated Examination Mode UI with a fixed 10-question/4-option global policy, no active correctness/running score, confirmed abandonment, completion-only result disclosure, transactional result persistence, explicit localized save retry, new Examination, and main-menu reset.
 - A JavaFX-independent `LearningService` that reuses `PassportRepository.findQuizEligibleCandidates()`, defensively applies the canonical `QuizCandidate.usable()` contract, deduplicates by canonical document, and returns stable presentation-safe entity/document models without creating a `QuizSession`.
-- A 234-test JUnit suite covering isolated catalogue and application SQLite integration, V1→V2 migration/rollback, user/authentication/Argon2id/session/authorization behavior, account and personal-results JavaFX flows, result ownership/idempotency/provenance/statistics, quiz-generation and lifecycle invariants, Learning/Training regression, deterministic production smokes, and JavaFX vertical behavior.
+- A 242-test JUnit suite covering isolated catalogue and application SQLite integration, V1→V2→V3 migration/rollback, Admin content domain invariants, user/authentication/Argon2id/session/authorization behavior, account and personal-results JavaFX flows, result ownership/idempotency/provenance/statistics, quiz-generation and lifecycle invariants, Learning/Training regression, deterministic production smokes, and JavaFX vertical behavior.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
 - The verified source passport dataset audit and Stage 5 manifest decisions in `docs/database-analysis.md`.
-- Two checksummed passport-catalogue migrations remain unchanged; separate application-database V1 creates completed Examination results and V2 transactionally adds users plus nullable result-owner foreign keys.
+- Two checksummed passport-catalogue migrations remain unchanged; separate application-database V1 creates completed Examination results, V2 transactionally adds users plus nullable result-owner foreign keys, and V3 adds authored-question/version/option, media-metadata, and minimal assessment foundation tables.
 - A deterministic transactional importer that consumes the independently validated Stage 5 manifest plus the validated Stage 10 review source, fails before mutation on stale review data, and produces a post-import validated logical catalogue fingerprint.
 - Working `SQLiteContinentRepository`, `SQLiteCountryRepository`, and `SQLitePassportRepository` implementations behind repository boundaries, with canonical `String` IDs, alternate geography, review status, aggregate entity document counts, image counts, and a prepared quiz-candidate query restricted to fully verified, known-type, quiz-eligible, non-duplicate records.
 - A non-JavaFX `CatalogueApplicationContext` that validates a read-only catalogue and wires all three SQLite repositories into `ContinentService`, `CountryService`, `PassportService`, and `QuizGenerationService`.
@@ -64,12 +64,12 @@ This document records the repository state after the Stage 13E integration and r
 - Versioned SQLite schema creation and deterministic manifest ingestion are implemented; Windows packaging of the read-only catalogue and passport assets remains a later release concern.
 - Learning remains passive and non-scored; Training and active quiz sessions remain in-memory and non-persistent; only completed Examination summaries are persisted.
 - Training immediate disclosure and Examination non-disclosure are enforced through `QuizModePolicy` and the shared coordinator/question controller.
-- Stage 13 local users, authentication, first-run/account/login/logout/switch UI, `CurrentUserSession`, `USER`/`ADMIN` role foundation, result ownership, My Results, and derived personal statistics are implemented; Admin UI, Question Bank, authored questions/tests, a permissions matrix, an analytics dashboard, settings, and active-session persistence remain future work.
+- Stage 13 local users/authentication/results are complete. Stage 14B.1 adds the Admin database/domain/repository-contract foundation; Admin services, SQLite implementations, CRUD workflows, authored/hybrid providers, Question Bank UI, Assessment Builder, permissions matrix, analytics dashboard, settings, and active-session persistence remain future work.
 - Localization infrastructure covers the implemented account, personal-results/statistics, catalogue, interactive-map, mode-selection, Learning, Training, and generated Examination flows in the default resource bundle; additional locales are not present.
 
 ### Not implemented
 
-- Authored/hybrid Question Bank sources and Admin UI.
+- Admin services and SQLite repository implementations, Question Bank workflows, authored/hybrid runtime sources, Assessment Builder, media upload, and Admin UI.
 - Persistent settings, active quiz-session persistence, and global/Admin analytics.
 - Windows runtime image, installer, and Windows execution verification.
 
@@ -290,6 +290,14 @@ Stage 13E finalization established that:
 - controllers have no `UserRepository`/`ResultRepository` dependency, principals remain password-free, password arrays/fields are cleared, `AuthorizationService` retains active-user and ADMIN boundaries, `NavigationService` remains the only FXML loader/navigation owner, and `ApplicationControllerFactory` remains the only controller-construction boundary;
 - Stage 13 closes with the 234-test suite and existing Maven package green, no schema redesign, no new feature scope, and no passport/catalogue/review/manifest/metadata changes.
 
+Stage 14B.1 established that:
+
+- checksummed application migration V003 creates strict `questions`, `question_versions`, `question_options`, `media_metadata`, and `assessments` tables with user/content foreign keys, deterministic uniqueness, constrained lifecycle/source values, and transactional V002→V003 rollback;
+- immutable JDK-only `Question`, `QuestionVersion`, `QuestionOption`, `MediaMetadata`, and minimal `AssessmentDefinition` models validate stable IDs, author IDs, timestamps, optional metadata, ordered options, and exactly one correct option;
+- `QuestionRepository`, `QuestionVersionRepository`, `MediaRepository`, and `AssessmentRepository` define persistence-only boundaries; implementations and authorization-aware Admin command services remain Stage 14B.2 work;
+- `AuthorizationService.requireAdmin()` remains the future service entry boundary, while repositories contain no role logic;
+- `QuizQuestion`, `QuizContent`, `QuizSession`, `QuestionSetProvider`, `QuizSessionCoordinator`, results, users, and the read-only passport catalogue remain unchanged.
+
 ### Known technical debt
 
 - Domain records outside the Stage 4C quiz scope still provide limited validation of identifiers, nullability, and value ranges.
@@ -323,8 +331,8 @@ Source files must remain unchanged. SQLite catalogue ingestion consumes the cano
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stages 4A and 4C established build and domain behavior; Stage 5 added the canonical manifest; Stage 6 added catalogue persistence; Stage 7 added catalogue presentation; Stage 8 added the reproducible map and runtime flow; Stage 9 added quiz generation; Stage 10 added editorial review/activation and deterministic read-only catalogue materialization; Stage 11 added shared Learning/Training/Examination lifecycle infrastructure; Stages 12B–12C completed generated Examination runtime/UI and result persistence; Stages 13B–13E delivered and integration-verified local users/authentication/session/ownership, account UI, and personal result-history/statistics.
+- Stages 4A–13E established the catalogue, quiz modes, results, and local-user baseline; Stage 14A fixed the Admin/Question Bank architecture, and Stage 14B.1 added its isolated application-database, domain-model, and repository-contract foundation without runtime quiz integration.
 
 ### Immediate next step
 
-Stage 13 is complete and provides the stable user/authentication/result/statistics baseline. The next feature-development pass should explicitly scope Admin UI and Question Bank architecture, authored questions/tests, a permissions matrix, and an analytics dashboard; persistent settings, active-session persistence, password recovery, network services, and Windows packaging remain separate future work.
+Stage 14B.1 is complete. Stage 14B.2 should add SQLite implementations and authorization-aware Admin command services behind the new repository contracts; Question Bank workflows, authored/hybrid providers, Assessment Builder, media upload, and Admin UI remain later bounded stages.

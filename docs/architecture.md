@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer є локальним JavaFX desktop-застосунком із розділеними UI, application logic і SQLite boundaries. Read-only manifest/catalogue/review pipelines, catalogue/map/Learning/Training UI, generated Examination runtime, completed-result persistence, local user/authentication/session foundation та user/session UI реалізовані. Authored Question Bank/Admin, active-session persistence, statistics UI та Windows packaging залишаються майбутніми етапами.
+Passport Trainer є локальним JavaFX desktop-застосунком із розділеними UI, application logic і SQLite boundaries. Read-only manifest/catalogue/review pipelines, catalogue/map/Learning/Training UI, generated Examination runtime, completed-result persistence, local users та Stage 14B.1 Admin database/domain foundation реалізовані. Admin services/workflows/UI, authored/hybrid runtime providers, active-session persistence та Windows packaging залишаються майбутніми етапами.
 
 ## Шари та дозволені залежності
 
@@ -109,6 +109,10 @@ Map metadata використовує окремий stable `mapRegionId` namesp
 | `User` | Persisted local account із DB-generated positive ID, canonical username, mutable display name, encoded password hash, `USER`/`ADMIN`, active flag і UTC timestamps; physical delete API відсутній. |
 | `UserRole` | Роль `USER` або `ADMIN`. |
 | `NewUser` | Валідовані account facts без ID до database-generated insert. |
+| `Question` / `QuestionLifecycleState` | Stable authored aggregate identity, `DRAFT`/`ACTIVE`/`ARCHIVED`, ADMIN author reference та UTC timestamps; це не runtime `QuizQuestion`. |
+| `QuestionVersion` / `QuestionOption` | Immutable authored version із typed content shape, prompt/optional metadata, deterministic ordered options і рівно одним correct option. |
+| `MediaMetadata` / `MediaReferenceType` | Metadata foundation для application-owned file або read-only passport-catalogue reference без file-upload behavior. |
+| `AssessmentDefinition` / `AssessmentState` | Мінімальна assessment identity/title/lifecycle foundation; builder, immutable publication versions і execution policy ще не реалізовані. |
 | `QuizQuestionType` | Точний контракт чотирьох підтримуваних стратегій генерації. |
 | `QuizContent` | Sealed typed subject/option contract для country, document і document-type значень зі stable identity та окремим presentation label. |
 | `QuizCandidate` | Повна canonical eligibility projection документа, image, entity, continent memberships, review state, duplicate identity та SHA-256. |
@@ -167,6 +171,10 @@ Per-target fingerprint schema version 1 використовує namespace `pass
 | `UserRepository` | Перевірка наявності users, пошук за ID/canonical username, DB-generated create, atomic create-if-empty для initial administrator та update локальних користувачів; delete відсутній. |
 | `ResultRepository` | Збереження та читання екзаменаційних результатів. |
 | `SettingsRepository` | Читання й збереження локальних налаштувань. |
+| `QuestionRepository` | Create/update/read authored question aggregate identity й lifecycle; authorization не виконує. |
+| `QuestionVersionRepository` | Append/read immutable authored question versions. |
+| `MediaRepository` | Create/update/read media metadata без filesystem або catalogue mutation. |
+| `AssessmentRepository` | Create/update/read minimal assessment definitions. |
 
 Контракти повертають domain-моделі. SQL, назви таблиць, `ResultSet` і JDBC-винятки не просочуються в services або controllers.
 
@@ -182,7 +190,7 @@ Per-target fingerprint schema version 1 використовує namespace `pass
 
 `SQLiteMigrationRunner` застосовує ordered SQL resources, перевіряє name і SHA-256 уже застосованої migration та відмовляється від unknown/newer schema. V1 створює normalized canonical tables. V2 додає manifest/base provenance columns, strict `review_decisions`, review-source metadata та materialized effective state; V1 не змінено. Stable manifest IDs залишаються `TEXT PRIMARY KEY`; duplicate references — self foreign keys; exact source path — portable POSIX relative text.
 
-`ApplicationDatabaseMigrationRunner` незалежно застосовує checksummed resources із `db/application-migration`, створює application schema при першому запуску та відмовляється від unknown/newer version або checksum mismatch без destructive migration. Application V1 створює `application_schema_migrations` і `examination_results`. V2 створює strict `users`, transactionally rebuild-ить result table з nullable `users(id) ON DELETE RESTRICT`, копіює всі V1 facts/anonymous `NULL` та fail/rollback-ить на unexpected orphan owner. Catalogue migration resources не використовуються й не змінюються.
+`ApplicationDatabaseMigrationRunner` незалежно застосовує checksummed resources із `db/application-migration`, створює application schema при першому запуску та відмовляється від unknown/newer version або checksum mismatch без destructive migration. Application V1 створює `application_schema_migrations` і `examination_results`; V2 додає strict users та nullable result ownership; V3 додає лише strict `questions`, `question_versions`, `question_options`, `media_metadata` і `assessments` foundation tables. V003 references application users/content with restrictive foreign keys, preserves V1/V2 data, and rolls back as one migration transaction. Catalogue migration resources не використовуються й не змінюються.
 
 `PassportCatalogueImporter` окремо валідовує `ManifestCatalogue`, читає canonical review source, перевіряє stable targets/fingerprints/activation до будь-якої database mutation, застосовує migrations і перебудовує catalogue у transaction. Manifest status/eligibility записуються в `manifest_review_status`/`manifest_quiz_eligible`; existing `review_status`/`quiz_eligible` містять effective materialized values. Decisions, review schema/count/checksum також копіюються у SQLite. Importer не сканує assets, не класифікує filenames і не змінює manifest/review source.
 
@@ -243,6 +251,8 @@ Controller не будує filesystem paths і не сканує source collecti
 
 `Clock` передається в lifecycle/generation/account/authentication services, щоб час детерміновано контролювався в тестах. `ApplicationDatabaseContext` owns one JavaFX-independent in-memory `CurrentUserSession`; `AuthenticatedUser` містить лише ID/username/display name/role, без password hash. `AccountSessionService` координує existing account/authentication/session boundaries, а `CurrentUserResultsService` — authorized current-account history/statistics без repository access із JavaFX controllers. Anonymous state не перетворюється на query key `0`; persisted-active account повторно перевіряється перед `ResultRepository.findByUserId`. `QuizSessionCoordinator` викликає injected current-user supplier рівно один раз під час `start`, використовує real positive user ID або runtime anonymous `0L`; зміна current principal після start не змінює session owner, а `ExamResultService` перетворює лише `0L` на persisted `NULL`. Controllers не створюють repositories/SQLite, не зберігають global user IDs, не будують `QuizGenerationRequest` і не визначають correctness. Learning не використовує coordinator.
 
+Stage 14B.1 додає repository contracts, але навмисно не створює порожній Admin service або SQLite CRUD implementation. Майбутній command service мусить викликати `AuthorizationService.requireAdmin()` до repository operation і брати actor ID з поверненого password-free principal; controller та repository не перевіряють role.
+
 `QuizQuestion` вимагає щонайменше два options з унікальними stable IDs, рівно одну correct option та type-specific shape. `QuizSession` перевіряє question/answer identity й correctness; lifecycle забороняє completion до повної відповіді. `ExamResult` зберігає canonical IDs, nullable user, assessment source/provenance, start/completion timestamps і correct/total counts; incorrect count, percentage та duration обчислюються. `AUTHORED`/`HYBRID` results вимагають immutable assessment ID/version.
 
 Для `EXAMINATION` coordinator повертає `QuizAnswerSubmissionResult.Accepted` без correctness/correct option і не показує score до `COMPLETED`; для `TRAINING` повертається authoritative `Feedback` і доступний active score. Lifecycle invariants спільні для режимів: duplicate/post-completion answers та early completion відхиляються, а `completedAt` з'являється лише після повного набору відповідей.
@@ -302,7 +312,7 @@ NavigationService ──► Passport List View
 Runtime composition:
 
 1. `ApplicationLocations` нормалізує configured catalogue/image locations і per-user writable application DB location;
-2. `ApplicationDatabaseContext.open` створює parent directory/SQLite file, застосовує application migrations та composes SQLite result/user repositories, Argon2id hashing, account/authentication/account-session/current-session/authorization services, `ExamResultService`, `StatisticsService` і `CurrentUserResultsService`;
+2. `ApplicationDatabaseContext.open` створює parent directory/SQLite file, застосовує application migrations through V003 та composes existing result/user/authentication services; Stage 14B.1 foundation repositories ще не мають SQLite implementations і не додаються до runtime composition;
 3. `CatalogueApplicationContext.openReadOnly` окремо створює read-only `SQLiteConnectionProvider` і перевіряє catalogue migration version/integrity;
 4. catalogue context створює три read-only SQLite repositories та catalogue/Learning/generation services;
 5. `PassportTrainerApplication` створює image locator, lifecycle service, application-scoped coordinator і controller factory, потім обирає first-run setup для empty user store або login;
@@ -321,14 +331,16 @@ Failure to open/migrate the application DB or open/validate the catalogue create
 - UI тести не порівнюють pixel-perfect screenshots;
 - `ArchitectureTest` захищає model від JavaFX imports;
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє immutable source paths;
-- application SQLite integration перевіряє fresh creation, version rejection, transactional V1→V2 anonymous preservation, orphan rollback, user FK enforcement, initial/ordinary account roles, local-user CRUD/deactivation, Argon2id/authentication/session/authorization, real/anonymous result ownership, provenance, one-session idempotency, retry, own-user isolation, inactive/anonymous result denial та in-memory statistics derivation; production Examination integration записує лише temporary application DB і звіряє незмінність catalogue bytes.
+- application SQLite integration перевіряє fresh creation, version rejection, transactional V1→V2 and V2→V3 upgrades, V3 conflict rollback, Admin foundation constraints/foreign keys, unchanged passport-catalogue bytes, user/result preservation, ownership, authentication/authorization, idempotency and statistics; production Examination integration записує лише temporary application DB.
 
 Stage 13E integration повторно підтвердила цю композицію на clean V001/V002 DB, V1→V2 upgrade, USER/ADMIN/anonymous account flows, exactly-once Examination ownership, own-user history/statistics isolation та production JavaFX navigation. Learning не отримав user dependency; Training не отримав persistence; Examination не розкриває correctness/score до completion. Full suite і existing Maven package залишаються release baseline без нової migration або architecture path.
+
+Stage 14B.1 ізолює editable/versioned Admin content від runtime: generated questions не переносяться до Question Bank, а `QuizQuestion`, `QuizContent`, `QuizSession`, `QuestionSetProvider`, `QuizSessionCoordinator`, `ExamResult` і `ResultRepository` не залежать від нових repository contracts.
 
 ## Що навмисно не реалізовано
 
 - persistent settings та active quiz-session persistence;
-- authored/hybrid Question Bank sources, authored questions/tests і JavaFX Admin UI;
+- Admin service/SQLite CRUD implementations, Question Bank/media workflows, authored/hybrid providers, Assessment Builder/version publication і JavaFX Admin UI;
 - explicit permissions matrix, global/Admin analytics dashboard та rankings/comparisons.
 
 Ці компоненти додаються окремими етапами без порушення зафіксованого напрямку залежностей.

@@ -61,7 +61,7 @@ class ApplicationDatabaseV2MigrationTest {
         try (Connection connection = provider.getConnection();
              Statement statement = connection.createStatement()) {
             assertEquals(
-                    2,
+                    ApplicationDatabaseMigrationRunner.CURRENT_VERSION,
                     scalarInt(statement, "SELECT MAX(version) FROM application_schema_migrations")
             );
             assertEquals(

@@ -19,7 +19,7 @@ import java.util.TreeMap;
 /** Applies the writable application database's ordered, checksummed migrations. */
 public final class ApplicationDatabaseMigrationRunner {
 
-    public static final int CURRENT_VERSION = 2;
+    public static final int CURRENT_VERSION = 3;
 
     private static final String MIGRATION_TABLE = "application_schema_migrations";
     private static final List<Migration> MIGRATIONS = List.of(
@@ -32,6 +32,11 @@ public final class ApplicationDatabaseMigrationRunner {
                     2,
                     "create_users_and_result_ownership",
                     "/db/application-migration/V002__create_users_and_result_ownership.sql"
+            ),
+            new Migration(
+                    3,
+                    "create_admin_content_foundation",
+                    "/db/application-migration/V003__create_admin_content_foundation.sql"
             )
     );
 
