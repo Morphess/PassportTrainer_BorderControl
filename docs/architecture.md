@@ -2,7 +2,7 @@
 
 ## Мета
 
-Passport Trainer є локальним JavaFX desktop-застосунком із розділеними UI, application logic і SQLite boundaries. Read-only manifest/catalogue/review pipelines, catalogue/map/Learning/Training UI, generated Examination runtime, completed-result persistence, local users та Stage 14B.1 Admin database/domain foundation реалізовані. Admin services/workflows/UI, authored/hybrid runtime providers, active-session persistence та Windows packaging залишаються майбутніми етапами.
+Passport Trainer є локальним JavaFX desktop-застосунком із розділеними UI, application logic і SQLite boundaries. Read-only manifest/catalogue/review pipelines, catalogue/map/Learning/Training UI, generated Examination runtime, completed-result persistence, local users та Stage 14B.2 Admin database/domain/repository/service foundation реалізовані. Admin workflows/UI, authored/hybrid runtime providers, active-session persistence та Windows packaging залишаються майбутніми етапами.
 
 ## Шари та дозволені залежності
 
@@ -184,6 +184,8 @@ Per-target fingerprint schema version 1 використовує namespace `pass
 
 `SQLiteUserRepository` працює лише з writable application DB. `UserAccountService` один раз canonicalize-ить login identity через Unicode NFKC, trim і `Locale.ROOT` lowercase, atomically створює лише одного initial `ADMIN`, створює ordinary accounts лише як `USER`, хешує password через Argon2id та виконує profile update/soft deactivation. Canonical username immutable і має database `UNIQUE`; display name non-unique/mutable.
 
+`SQLiteQuestionRepository`, `SQLiteQuestionVersionRepository`, `SQLiteMediaRepository` і `SQLiteAssessmentRepository` працюють лише з writable application DB та не виконують authorization. Question-version append вставляє version і весь ordered option set в одній transaction; будь-яка помилка відкочує обидві таблиці. Усі reads reconstruct-ять validated domain values у deterministic order, nullable metadata зберігається без sentinel values, archive state є durable, а JDBC failures перетворюються на `RepositoryAccessException`.
+
 ## Database layer
 
 `DatabaseConnectionProvider` є мінімальною межею отримання JDBC-з'єднання. `SQLiteConnectionProvider` формує `jdbc:sqlite:` URL із нормалізованого абсолютного `Path`, вмикає foreign keys для кожного connection і підтримує explicit read-only mode для runtime catalogue. Закривати connection зобов'язаний caller через try-with-resources.
@@ -245,13 +247,16 @@ Controller не будує filesystem paths і не сканує source collecti
 | `UserAccountService` | `UserRepository`, `PasswordHasher`, `Clock` | First-run detection, atomic initial `ADMIN`, ordinary `USER`, password-confirmation/account validation, canonical username ownership, DB-generated create, mutable display name та soft deactivation. |
 | `AccountSessionService` | `UserAccountService`, `AuthenticationService`, `CurrentUserSession` | UI-safe orchestration first-run/registration/login/anonymous/logout/switch; повертає або зберігає лише password-free principals. |
 | `AuthorizationService` | `CurrentUserSession`, `UserRepository` | Повторно вимагає authenticated persisted-active account для personal-data reads і додатково роль `ADMIN` для privileged commands; controller/repository authorization відсутня. |
+| `AdminQuestionService` | `AuthorizationService`, `QuestionRepository`, `QuestionVersionRepository`, `Clock`, ID supplier | Require-ить persisted-active `ADMIN` перед кожним read/mutation; створює `DRAFT`, append-ить immutable versions, читає/list-ить і archive-ить questions; actor ID надходить лише з principal. |
+| `AdminAssessmentService` | `AuthorizationService`, `AssessmentRepository`, `Clock`, ID supplier | Require-ить `ADMIN`; створює/read/list/archive-ить minimal assessment foundations без builder/publication policy. |
+| `AdminMediaService` | `AuthorizationService`, `MediaRepository`, `Clock`, ID supplier | Require-ить `ADMIN`; створює/read/list/archive-ить metadata без upload/copy/delete або passport-catalogue mutation. |
 | `StatisticsService` | `ResultRepository` | Виконує один bounded `findByUserId` read, повертає newest-first history і в пам'яті обчислює count/average/best/answered/correct без aggregate persistence. |
 | `CurrentUserResultsService` | `CurrentUserSession`, `AuthorizationService`, `StatisticsService` | Current-account facade: anonymous повертає explicit empty optional без user-ID query, active account отримує лише власний snapshot, inactive account відхиляється до result read. |
 | `SettingsService` | `SettingsRepository` | Читання/збереження параметрів без знання способу зберігання. |
 
-`Clock` передається в lifecycle/generation/account/authentication services, щоб час детерміновано контролювався в тестах. `ApplicationDatabaseContext` owns one JavaFX-independent in-memory `CurrentUserSession`; `AuthenticatedUser` містить лише ID/username/display name/role, без password hash. `AccountSessionService` координує existing account/authentication/session boundaries, а `CurrentUserResultsService` — authorized current-account history/statistics без repository access із JavaFX controllers. Anonymous state не перетворюється на query key `0`; persisted-active account повторно перевіряється перед `ResultRepository.findByUserId`. `QuizSessionCoordinator` викликає injected current-user supplier рівно один раз під час `start`, використовує real positive user ID або runtime anonymous `0L`; зміна current principal після start не змінює session owner, а `ExamResultService` перетворює лише `0L` на persisted `NULL`. Controllers не створюють repositories/SQLite, не зберігають global user IDs, не будують `QuizGenerationRequest` і не визначають correctness. Learning не використовує coordinator.
+`Clock` передається в lifecycle/generation/account/authentication/Admin services, щоб час детерміновано контролювався в тестах. `ApplicationDatabaseContext` owns one JavaFX-independent in-memory `CurrentUserSession`, concrete writable Admin repositories і authorization-aware Admin services; вони не inject-яться в JavaFX controllers до появи окремого Admin workflow. `AuthenticatedUser` містить лише ID/username/display name/role, без password hash. `AccountSessionService` координує existing account/authentication/session boundaries, а `CurrentUserResultsService` — authorized current-account history/statistics без repository access із JavaFX controllers. Anonymous state не перетворюється на query key `0`; persisted-active account повторно перевіряється перед `ResultRepository.findByUserId`. `QuizSessionCoordinator` викликає injected current-user supplier рівно один раз під час `start`, використовує real positive user ID або runtime anonymous `0L`; зміна current principal після start не змінює session owner, а `ExamResultService` перетворює лише `0L` на persisted `NULL`. Controllers не створюють repositories/SQLite, не зберігають global user IDs, не будують `QuizGenerationRequest` і не визначають correctness. Learning не використовує coordinator.
 
-Stage 14B.1 додає repository contracts, але навмисно не створює порожній Admin service або SQLite CRUD implementation. Майбутній command service мусить викликати `AuthorizationService.requireAdmin()` до repository operation і брати actor ID з поверненого password-free principal; controller та repository не перевіряють role.
+Stage 14B.2 реалізує Admin service/repository foundation: кожна public privileged operation викликає `AuthorizationService.requireAdmin()` до protected repository read/mutation і бере creator ID з поверненого password-free principal. Repositories залишаються role-agnostic. Повні Question Bank/media workflows, Assessment Builder/publication та authored/hybrid execution не входять до цієї межі.
 
 `QuizQuestion` вимагає щонайменше два options з унікальними stable IDs, рівно одну correct option та type-specific shape. `QuizSession` перевіряє question/answer identity й correctness; lifecycle забороняє completion до повної відповіді. `ExamResult` зберігає canonical IDs, nullable user, assessment source/provenance, start/completion timestamps і correct/total counts; incorrect count, percentage та duration обчислюються. `AUTHORED`/`HYBRID` results вимагають immutable assessment ID/version.
 
@@ -312,7 +317,7 @@ NavigationService ──► Passport List View
 Runtime composition:
 
 1. `ApplicationLocations` нормалізує configured catalogue/image locations і per-user writable application DB location;
-2. `ApplicationDatabaseContext.open` створює parent directory/SQLite file, застосовує application migrations through V003 та composes existing result/user/authentication services; Stage 14B.1 foundation repositories ще не мають SQLite implementations і не додаються до runtime composition;
+2. `ApplicationDatabaseContext.open` створює parent directory/SQLite file, застосовує application migrations through V003 та composes result/user/authentication services разом із concrete Admin repositories/services; Admin services не передаються controller factory, бо Admin UI ще відсутній;
 3. `CatalogueApplicationContext.openReadOnly` окремо створює read-only `SQLiteConnectionProvider` і перевіряє catalogue migration version/integrity;
 4. catalogue context створює три read-only SQLite repositories та catalogue/Learning/generation services;
 5. `PassportTrainerApplication` створює image locator, lifecycle service, application-scoped coordinator і controller factory, потім обирає first-run setup для empty user store або login;
@@ -331,16 +336,16 @@ Failure to open/migrate the application DB or open/validate the catalogue create
 - UI тести не порівнюють pixel-perfect screenshots;
 - `ArchitectureTest` захищає model від JavaFX imports;
 - manifest тести використовують synthetic temporary datasets, а checked-in manifest test перевіряє immutable source paths;
-- application SQLite integration перевіряє fresh creation, version rejection, transactional V1→V2 and V2→V3 upgrades, V3 conflict rollback, Admin foundation constraints/foreign keys, unchanged passport-catalogue bytes, user/result preservation, ownership, authentication/authorization, idempotency and statistics; production Examination integration записує лише temporary application DB.
+- application SQLite integration перевіряє fresh creation, version rejection, transactional V1→V2 and V2→V3 upgrades, V3 conflict rollback, Admin repository round trips, deterministic ordering, version/option rollback, archive durability, restrictive foreign keys, typed JDBC errors, ADMIN/USER/anonymous/inactive authorization matrix, unchanged passport-catalogue bytes, user/result preservation, ownership, idempotency and statistics; production Examination integration записує лише temporary application DB.
 
 Stage 13E integration повторно підтвердила цю композицію на clean V001/V002 DB, V1→V2 upgrade, USER/ADMIN/anonymous account flows, exactly-once Examination ownership, own-user history/statistics isolation та production JavaFX navigation. Learning не отримав user dependency; Training не отримав persistence; Examination не розкриває correctness/score до completion. Full suite і existing Maven package залишаються release baseline без нової migration або architecture path.
 
-Stage 14B.1 ізолює editable/versioned Admin content від runtime: generated questions не переносяться до Question Bank, а `QuizQuestion`, `QuizContent`, `QuizSession`, `QuestionSetProvider`, `QuizSessionCoordinator`, `ExamResult` і `ResultRepository` не залежать від нових repository contracts.
+Stage 14B.2 зберігає ізоляцію editable/versioned Admin content від runtime: generated questions не переносяться до Question Bank, Admin services не inject-яться в existing controllers, а `QuizQuestion`, `QuizContent`, `QuizSession`, `QuestionSetProvider`, `QuizSessionCoordinator`, `ExamResult` і `ResultRepository` не залежать від нових repository implementations.
 
 ## Що навмисно не реалізовано
 
 - persistent settings та active quiz-session persistence;
-- Admin service/SQLite CRUD implementations, Question Bank/media workflows, authored/hybrid providers, Assessment Builder/version publication і JavaFX Admin UI;
+- Question Bank/media workflows, authored/hybrid providers, Assessment Builder/version publication і JavaFX Admin UI;
 - explicit permissions matrix, global/Admin analytics dashboard та rankings/comparisons.
 
 Ці компоненти додаються окремими етапами без порушення зафіксованого напрямку залежностей.

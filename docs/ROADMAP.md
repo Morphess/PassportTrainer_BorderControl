@@ -109,12 +109,13 @@ The roadmap preserves the established architecture and product scope. Details re
 
 ## 12. Admin and Question Bank — Stage 14
 
-- **Status:** Stage 14A architecture gate and Stage 14B.1 database/domain foundation completed; no Admin workflow or UI is implemented.
+- **Status:** Stage 14A architecture gate and Stage 14B.1–14B.2 persistence/service foundation completed; no Admin workflow or UI is implemented.
 - **Goal:** add authored questions, media, assessments, and generated/authored/hybrid execution without coupling runtime quiz state to Admin persistence.
 - **Delivered in Stage 14A:** Admin authorization/service/repository boundaries, authored content/versioning model, source-provider strategy, media ownership, result compatibility, and staged implementation decisions.
 - **Delivered in Stage 14B.1:** checksummed application V3 foundation tables; immutable authored Question/Version/Option, media, and minimal assessment models; persistence-only repository contracts; transactional fresh/V2 upgrade and rollback coverage; unchanged generated quiz and passport-catalogue boundaries.
-- **Stage 14B.2:** SQLite repository implementations and authorization-aware Admin command services; no JavaFX UI.
-- **Later Stage 14:** Question Bank/media workflows, assessment builder/version publication, Admin UI, authored/hybrid runtime integration, and final regression.
+- **Delivered in Stage 14B.2:** concrete SQLite repositories for questions, immutable versions/options, media metadata, and minimal assessments; atomic version/option writes; deterministic reconstruction and archive persistence; authorization-aware Admin services with principal-derived creator IDs; application-database composition; and unchanged generated quiz/catalogue boundaries.
+- **Stage 14C:** separately scope Question Bank and media-metadata workflows/UI.
+- **Later Stage 14:** Assessment Builder/version publication, authored/hybrid runtime integration, and final regression.
 - **Dependencies:** Stage 13 users/authorization/results and the Stage 12 question-provider/result-provenance boundaries.
 
 ## 13. Windows release — Stage 15

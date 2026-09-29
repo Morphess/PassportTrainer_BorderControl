@@ -1,6 +1,6 @@
 # Passport Trainer project state
 
-This document records the repository state after the Stage 14B.1 Admin database/domain foundation pass. It distinguishes implemented behavior from architectural contracts and planned work.
+This document records the repository state after the Stage 14B.2 Admin repository/service foundation pass. It distinguishes implemented behavior from architectural contracts and planned work.
 
 ### Current technical baseline
 
@@ -30,6 +30,8 @@ This document records the repository state after the Stage 14B.1 Admin database/
 - The authoritative `DocumentType` contract is `ORDINARY_PASSPORT`, `DIPLOMATIC_PASSPORT`, `SERVICE_PASSPORT`, `NATIONAL_ID`, and `UNKNOWN`.
 - The authoritative `QuizQuestionType` contract is `PASSPORT_TO_COUNTRY`, `COUNTRY_TO_PASSPORT`, `DOCUMENT_TYPE`, and `FIND_ORDINARY_PASSPORT`.
 - Repository interfaces for continents, countries, passports, users, results, settings, authored questions/versions, media metadata, and assessments; `PassportRepository` includes one bounded quiz-candidate read.
+- Concrete writable-database `SQLiteQuestionRepository`, `SQLiteQuestionVersionRepository`, `SQLiteMediaRepository`, and `SQLiteAssessmentRepository` implementations with deterministic reads, restrictive foreign keys, typed error mapping, durable archive state, and atomic question-version/option writes.
+- Authorization-aware `AdminQuestionService`, `AdminAssessmentService`, and metadata-only `AdminMediaService` boundaries; every public operation requires the current persisted-active `ADMIN`, and create operations derive author IDs from that principal.
 - Service-layer classes using constructor injection, including catalogue browsing by canonical continent membership.
 - `DatabaseConnectionProvider` and `SQLiteConnectionProvider` with per-connection foreign-key enforcement and explicit read-only catalogue mode.
 - A separate writable per-user application SQLite database, created from checksummed application migrations independently of the strictly read-only passport catalogue; application V2 adds local users and referential result ownership, while V3 adds only the Admin content foundation.
@@ -44,7 +46,7 @@ This document records the repository state after the Stage 14B.1 Admin database/
 - A complete non-persistent Training Mode UI: global or country-scoped configuration, all four generated question types across image/text and image-card layouts, safe image gating, authoritative immediate feedback, in-place progression, completion/result summary, restart, new configuration, main-menu reset, and confirmed abandonment.
 - A complete generated Examination Mode UI with a fixed 10-question/4-option global policy, no active correctness/running score, confirmed abandonment, completion-only result disclosure, transactional result persistence, explicit localized save retry, new Examination, and main-menu reset.
 - A JavaFX-independent `LearningService` that reuses `PassportRepository.findQuizEligibleCandidates()`, defensively applies the canonical `QuizCandidate.usable()` contract, deduplicates by canonical document, and returns stable presentation-safe entity/document models without creating a `QuizSession`.
-- A 242-test JUnit suite covering isolated catalogue and application SQLite integration, V1→V2→V3 migration/rollback, Admin content domain invariants, user/authentication/Argon2id/session/authorization behavior, account and personal-results JavaFX flows, result ownership/idempotency/provenance/statistics, quiz-generation and lifecycle invariants, Learning/Training regression, deterministic production smokes, and JavaFX vertical behavior.
+- A 251-test JUnit suite covering isolated catalogue and application SQLite integration, V1→V2→V3 migration/rollback, Admin content domain/repository/service invariants, version/option transaction rollback, the ADMIN/USER/anonymous/inactive authorization matrix, user/authentication/Argon2id/session behavior, account and personal-results JavaFX flows, result ownership/idempotency/provenance/statistics, quiz-generation and lifecycle invariants, Learning/Training regression, deterministic production smokes, and JavaFX vertical behavior.
 - A versioned TSV metadata layer for continent mappings, entity corrections, document-type aliases, exact source overrides, and service-file exclusions.
 - A JDK-only read-only scanner, deterministic manifest generator, strict validator, and command-line entry point in `ua.passporttrainer.manifest`.
 - A generated canonical TSV catalogue with 7 continents, 139 entities, 521 provisional document records, 521 source-image records, and 166 normalization aliases.
@@ -64,12 +66,12 @@ This document records the repository state after the Stage 14B.1 Admin database/
 - Versioned SQLite schema creation and deterministic manifest ingestion are implemented; Windows packaging of the read-only catalogue and passport assets remains a later release concern.
 - Learning remains passive and non-scored; Training and active quiz sessions remain in-memory and non-persistent; only completed Examination summaries are persisted.
 - Training immediate disclosure and Examination non-disclosure are enforced through `QuizModePolicy` and the shared coordinator/question controller.
-- Stage 13 local users/authentication/results are complete. Stage 14B.1 adds the Admin database/domain/repository-contract foundation; Admin services, SQLite implementations, CRUD workflows, authored/hybrid providers, Question Bank UI, Assessment Builder, permissions matrix, analytics dashboard, settings, and active-session persistence remain future work.
+- Stage 13 local users/authentication/results and the Stage 14B.2 Admin database/domain/repository/service foundation are complete; Question Bank CRUD workflows, media management, authored/hybrid providers, Admin UI, Assessment Builder, permissions matrix, analytics dashboard, settings, and active-session persistence remain future work.
 - Localization infrastructure covers the implemented account, personal-results/statistics, catalogue, interactive-map, mode-selection, Learning, Training, and generated Examination flows in the default resource bundle; additional locales are not present.
 
 ### Not implemented
 
-- Admin services and SQLite repository implementations, Question Bank workflows, authored/hybrid runtime sources, Assessment Builder, media upload, and Admin UI.
+- Question Bank CRUD workflows, authored/hybrid runtime sources, Assessment Builder/version publication, media upload/file handling, and Admin UI.
 - Persistent settings, active quiz-session persistence, and global/Admin analytics.
 - Windows runtime image, installer, and Windows execution verification.
 
@@ -290,12 +292,13 @@ Stage 13E finalization established that:
 - controllers have no `UserRepository`/`ResultRepository` dependency, principals remain password-free, password arrays/fields are cleared, `AuthorizationService` retains active-user and ADMIN boundaries, `NavigationService` remains the only FXML loader/navigation owner, and `ApplicationControllerFactory` remains the only controller-construction boundary;
 - Stage 13 closes with the 234-test suite and existing Maven package green, no schema redesign, no new feature scope, and no passport/catalogue/review/manifest/metadata changes.
 
-Stage 14B.1 established that:
+Stage 14B.1–14B.2 established that:
 
 - checksummed application migration V003 creates strict `questions`, `question_versions`, `question_options`, `media_metadata`, and `assessments` tables with user/content foreign keys, deterministic uniqueness, constrained lifecycle/source values, and transactional V002→V003 rollback;
 - immutable JDK-only `Question`, `QuestionVersion`, `QuestionOption`, `MediaMetadata`, and minimal `AssessmentDefinition` models validate stable IDs, author IDs, timestamps, optional metadata, ordered options, and exactly one correct option;
-- `QuestionRepository`, `QuestionVersionRepository`, `MediaRepository`, and `AssessmentRepository` define persistence-only boundaries; implementations and authorization-aware Admin command services remain Stage 14B.2 work;
-- `AuthorizationService.requireAdmin()` remains the future service entry boundary, while repositories contain no role logic;
+- concrete SQLite repositories implement all four persistence-only contracts with deterministic mapping and `RepositoryAccessException` boundaries; question-version and option insertion commits or rolls back as one transaction;
+- `AdminQuestionService`, `AdminAssessmentService`, and metadata-only `AdminMediaService` call `AuthorizationService.requireAdmin()` before every protected read or mutation and derive creator IDs from the returned password-free principal;
+- `ApplicationDatabaseContext` composes the Admin repositories/services without exposing them to JavaFX controllers or adding an Admin UI;
 - `QuizQuestion`, `QuizContent`, `QuizSession`, `QuestionSetProvider`, `QuizSessionCoordinator`, results, users, and the read-only passport catalogue remain unchanged.
 
 ### Known technical debt
@@ -331,8 +334,8 @@ Source files must remain unchanged. SQLite catalogue ingestion consumes the cano
 - Keep JDK 25 active for Maven Wrapper.
 - For significant work: inspect, plan, identify affected files, implement, test, package, self-review, inspect the diff, and update project documentation.
 - Do not create Git commits unless directly requested by the user.
-- Stages 4A–13E established the catalogue, quiz modes, results, and local-user baseline; Stage 14A fixed the Admin/Question Bank architecture, and Stage 14B.1 added its isolated application-database, domain-model, and repository-contract foundation without runtime quiz integration.
+- Stages 4A–13E established the catalogue, quiz modes, results, and local-user baseline; Stage 14A fixed the Admin/Question Bank architecture, Stage 14B.1 added the isolated schema/domain/contracts, and Stage 14B.2 added concrete SQLite repositories plus authorization-aware services without runtime quiz or UI integration.
 
 ### Immediate next step
 
-Stage 14B.1 is complete. Stage 14B.2 should add SQLite implementations and authorization-aware Admin command services behind the new repository contracts; Question Bank workflows, authored/hybrid providers, Assessment Builder, media upload, and Admin UI remain later bounded stages.
+Stage 14B.2 is complete. Stage 14C should separately scope Question Bank and media-metadata workflows/UI; Assessment Builder/version publication and authored/hybrid runtime integration remain later bounded stages.
